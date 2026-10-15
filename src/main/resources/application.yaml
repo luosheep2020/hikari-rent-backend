@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: hikari-rent-backend
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+      # MyBatis 配置
+    map-underscore-to-camel-case: true
+  global-config:
+      # 全局配置
+    db-config:
+        # 数据库配置
+      id-type: auto
+storage:
+  public-base-url: ${R2_PUBLIC_BASE_URL:}

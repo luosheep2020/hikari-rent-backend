@@ -1,0 +1,435 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.rental.mapper.RentalMapper">
+
+  <resultMap
+    id="RentalResultMap"
+    type="com.hikari.rent.rental.entity.Rental"
+    autoMapping="true">
+
+    <id column="id" property="id"/>
+
+    <result
+      column="status"
+      property="status"
+      javaType="com.hikari.rent.rental.enums.RentalStatus"
+      typeHandler="com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler"/>
+
+    <result
+      column="review_status"
+      property="reviewStatus"
+      javaType="com.hikari.rent.rental.enums.RentalReviewStatus"
+      typeHandler="com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler"/>
+
+  </resultMap>
+
+
+  <select
+    id="selectManagementCompanyByRentalId"
+    resultType="com.hikari.rent.rental.repository.model.RentalManagementCompanyRow">
+
+    SELECT
+    mc.name,
+    mc.address,
+    mc.license_number,
+    mc.email
+
+    FROM rentals r
+
+    INNER JOIN companies mc
+    ON mc.id = r.management_company_id
+    AND mc.status = 1
+
+    WHERE r.id = #{rentalId}
+    AND r.status = 1
+    AND r.review_status = 2
+
+    AND EXISTS (
+    SELECT 1
+    FROM companies c
+    WHERE c.id = r.company_id
+    AND c.status = 1
+    )
+
+    AND EXISTS (
+    SELECT 1
+    FROM users u
+    WHERE u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+    )
+
+  </select>
+  <select
+    id="selectAgentByRentalId"
+    resultType="com.hikari.rent.rental.repository.model.RentalAgentRow">
+
+    SELECT
+    u.id,
+    u.nickname AS name,
+    f.storage_key AS avatar_storage_key,
+    c.name AS company,
+    c.business_hours,
+    c.closed_days
+
+    FROM rentals r
+
+    INNER JOIN users u
+    ON u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+
+    INNER JOIN companies c
+    ON c.id = r.company_id
+    AND c.status = 1
+
+    LEFT JOIN files f
+    ON f.id = u.avatar_file_id
+    AND f.status = 1
+
+    WHERE r.id = #{rentalId}
+    AND r.status = 1
+    AND r.review_status = 2
+
+  </select>
+  <select id="selectPublicById" resultMap="RentalResultMap">
+    SELECT r.*
+    FROM rentals r
+    WHERE r.id = #{id}
+    AND r.status = 1
+    AND r.review_status = 2
+
+    AND EXISTS (
+    SELECT 1
+    FROM companies c
+    WHERE c.id = r.company_id
+    AND c.status = 1
+    )
+
+    AND EXISTS (
+    SELECT 1
+    FROM users u
+    WHERE u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+    )
+  </select>
+
+  <select id="searchPage" resultMap="RentalResultMap">
+    SELECT r.*
+    FROM rentals r
+
+    WHERE r.status = 1
+    AND r.review_status = 2
+
+
+    AND EXISTS (
+    SELECT 1
+    FROM companies c
+    WHERE c.id = r.company_id
+    AND c.status = 1
+    )
+
+
+    AND EXISTS (
+    SELECT 1
+    FROM users u
+    WHERE u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+    )
+
+
+    <if test="query.keyword != null and query.keyword.trim() != ''">
+      AND r.name LIKE CONCAT(
+      '%',
+      REPLACE(
+      REPLACE(
+      REPLACE(
+      TRIM(#{query.keyword}),
+      '=',
+      '=='
+      ),
+      '%',
+      '=%'
+      ),
+      '_',
+      '=_'
+      ),
+      '%'
+      ) ESCAPE '='
+    </if>
+
+    <if test="query.areaCode != null and query.areaCode != ''">
+      AND r.area_code = #{query.areaCode}
+    </if>
+
+
+    <if test="query.minRent != null">
+      AND r.monthly_rent &gt;= #{query.minRent}
+    </if>
+
+    <if test="query.maxRent != null">
+      AND r.monthly_rent &lt;= #{query.maxRent}
+    </if>
+
+
+    <if test="query.floorPlans != null and query.floorPlans.size() > 0">
+      AND r.floor_plan IN
+      <foreach
+        collection="query.floorPlans"
+        item="floorPlan"
+        open="("
+        separator=","
+        close=")">
+        #{floorPlan}
+      </foreach>
+    </if>
+
+    <if test="query.maxBuildingAge != null">
+      AND r.built_year IS NOT NULL
+      AND r.built_month IS NOT NULL
+
+      AND STR_TO_DATE(
+      CONCAT(
+      r.built_year,
+      '-',
+      LPAD(r.built_month, 2, '0'),
+      '-01'
+      ),
+      '%Y-%m-%d'
+      ) &lt;= DATE(
+      DATE_ADD(UTC_TIMESTAMP(), INTERVAL 9 HOUR)
+      )
+
+      AND TIMESTAMPDIFF(
+      YEAR,
+      STR_TO_DATE(
+      CONCAT(
+      r.built_year,
+      '-',
+      LPAD(r.built_month, 2, '0'),
+      '-01'
+      ),
+      '%Y-%m-%d'
+      ),
+      DATE(
+      DATE_ADD(UTC_TIMESTAMP(), INTERVAL 9 HOUR)
+      )
+      ) &lt;= #{query.maxBuildingAge}
+    </if>
+
+    <if test="query.stationId != null or query.maxWalkingMinutes != null">
+      AND EXISTS (
+      SELECT 1
+      FROM rental_stations rs
+      WHERE rs.rental_id = r.id
+
+      <if test="query.stationId != null">
+        AND rs.station_id = #{query.stationId}
+      </if>
+
+      <if test="query.maxWalkingMinutes != null">
+        AND rs.walking_minutes &lt;=
+        #{query.maxWalkingMinutes}
+      </if>
+      )
+    </if>
+
+    <if test="query.featureCodes != null and query.featureCodes.size() > 0">
+      <foreach
+        collection="query.featureCodes"
+        item="featureCode">
+
+        AND EXISTS (
+        SELECT 1
+        FROM rental_feature_relations rf
+        INNER JOIN rental_features f
+        ON f.id = rf.feature_id
+
+        WHERE rf.rental_id = r.id
+        AND f.code = #{featureCode}
+        AND f.status = 1
+        )
+
+      </foreach>
+    </if>
+
+    <choose>
+      <when test="query.sort == 'rentAsc'">
+        ORDER BY r.monthly_rent ASC, r.id DESC
+      </when>
+
+      <when test="query.sort == 'rentDesc'">
+        ORDER BY r.monthly_rent DESC, r.id DESC
+      </when>
+
+      <when test="query.sort == 'areaDesc'">
+        ORDER BY r.area_sqm DESC, r.id DESC
+      </when>
+
+      <when test="query.sort == 'walkingAsc'">
+        ORDER BY
+        (
+        SELECT MIN(rs_sort.walking_minutes)
+        FROM rental_stations rs_sort
+        WHERE rs_sort.rental_id = r.id
+        ) IS NULL ASC,
+
+        (
+        SELECT MIN(rs_sort.walking_minutes)
+        FROM rental_stations rs_sort
+        WHERE rs_sort.rental_id = r.id
+        ) ASC,
+
+        r.id DESC
+      </when>
+
+      <otherwise>
+        ORDER BY r.published_at DESC, r.id DESC
+      </otherwise>
+    </choose>
+
+  </select>
+  <!-- 房源照片与户型图 -->
+  <select
+    id="selectImagesByRentalIds"
+    resultType="com.hikari.rent.rental.repository.model.RentalImageRow">
+
+    SELECT
+    ri.rental_id,
+    ri.file_id,
+    f.storage_key,
+    ri.kind,
+    ri.sort_order
+
+    FROM rental_images ri
+
+    INNER JOIN files f
+    ON f.id = ri.file_id
+
+    WHERE f.status = 1
+    AND f.purpose = 'RENTAL_IMAGE'
+
+    <!-- 空列表返回空集，不能变成查询全部房源 -->
+    <choose>
+      <when test="rentalIds != null and rentalIds.size() > 0">
+        AND ri.rental_id IN
+        <foreach
+          collection="rentalIds"
+          item="rentalId"
+          open="("
+          separator=","
+          close=")">
+          #{rentalId}
+        </foreach>
+      </when>
+
+      <otherwise>
+        AND 1 = 0
+      </otherwise>
+    </choose>
+
+    ORDER BY
+    ri.rental_id ASC,
+    ri.kind ASC,
+    ri.sort_order ASC,
+    ri.id ASC
+
+  </select>
+
+
+  <!-- 附近车站 -->
+  <select
+    id="selectStationsByRentalIds"
+    resultType="com.hikari.rent.rental.repository.model.RentalStationRow">
+
+    SELECT
+    rs.rental_id,
+    rs.station_id,
+    s.name,
+    s.line_name,
+    rs.walking_minutes
+
+    FROM rental_stations rs
+
+    INNER JOIN stations s
+    ON s.id = rs.station_id
+
+    WHERE 1 = 1
+
+    <choose>
+      <when test="rentalIds != null and rentalIds.size() > 0">
+        AND rs.rental_id IN
+        <foreach
+          collection="rentalIds"
+          item="rentalId"
+          open="("
+          separator=","
+          close=")">
+          #{rentalId}
+        </foreach>
+      </when>
+
+      <otherwise>
+        AND 1 = 0
+      </otherwise>
+    </choose>
+
+    ORDER BY
+    rs.rental_id ASC,
+    rs.walking_minutes ASC,
+    rs.station_id ASC
+
+  </select>
+
+
+  <!-- 设备与入住条件 -->
+  <select
+    id="selectFeaturesByRentalIds"
+    resultType="com.hikari.rent.rental.repository.model.RentalFeatureRow">
+
+    SELECT
+    rf.rental_id,
+    rf.feature_id,
+    f.code,
+    f.name,
+    f.category
+
+    FROM rental_feature_relations rf
+
+    INNER JOIN rental_features f
+    ON f.id = rf.feature_id
+
+    WHERE f.status = 1
+
+    <choose>
+      <when test="rentalIds != null and rentalIds.size() > 0">
+        AND rf.rental_id IN
+        <foreach
+          collection="rentalIds"
+          item="rentalId"
+          open="("
+          separator=","
+          close=")">
+          #{rentalId}
+        </foreach>
+      </when>
+
+      <otherwise>
+        AND 1 = 0
+      </otherwise>
+    </choose>
+
+    ORDER BY
+    rf.rental_id ASC,
+    f.category ASC,
+    f.sort_order ASC,
+    f.id ASC
+
+  </select>
+
+</mapper>
