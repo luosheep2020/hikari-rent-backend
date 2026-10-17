@@ -1,6 +1,7 @@
 package com.hikari.rent.area.controller;
 
 import com.hikari.rent.area.service.AreaService;
+import com.hikari.rent.area.vo.AreaTreeVO;
 import com.hikari.rent.area.vo.AreaVO;
 import com.hikari.rent.common.result.ApiResponse;
 import jakarta.annotation.Resource;
@@ -29,5 +30,10 @@ public class AreaController {
     return ApiResponse.success(
       areaService.getChildren(parentCode)
     );
+  }
+
+  @GetMapping("/tree")
+  public ApiResponse<List<AreaTreeVO>> getTree() {
+    return ApiResponse.success(areaService.getTree());
   }
 }

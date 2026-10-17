@@ -29,4 +29,14 @@ public class AreaRepositoryImpl
 
     return baseMapper.selectList(query);
   }
+
+  @Override
+  public List<Area> findAllOrdered() {
+    return baseMapper.selectList(
+      new LambdaQueryWrapper<Area>()
+        .orderByAsc(Area::getLevel)
+        .orderByAsc(Area::getSortOrder)
+        .orderByAsc(Area::getCode)
+    );
+  }
 }

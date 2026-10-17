@@ -6,6 +6,15 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD}
+      database: 0
+      connect-timeout: 5s
+      timeout: 3s
 
 mybatis-plus:
   configuration:

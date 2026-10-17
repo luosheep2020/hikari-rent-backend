@@ -8,4 +8,5 @@ import java.util.List;
 public interface AreaRepository extends IRepository<Area> {
 
   List<Area> findChildren(String parentCode);
+  List<Area> findAllOrdered();
 }
