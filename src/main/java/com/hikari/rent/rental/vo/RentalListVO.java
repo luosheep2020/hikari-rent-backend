@@ -21,6 +21,8 @@ public class RentalListVO {
 
   private String name;
 
+  private Integer propertyType;
+
   private String address;
 
   // 文件服务生成的可访问地址。

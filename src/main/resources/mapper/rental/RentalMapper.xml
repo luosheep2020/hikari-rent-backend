@@ -5,12 +5,19 @@
 
 <mapper namespace="com.hikari.rent.rental.mapper.RentalMapper">
 
+  <!-- Rental entity mapping. -->
   <resultMap
     id="RentalResultMap"
     type="com.hikari.rent.rental.entity.Rental"
     autoMapping="true">
 
     <id column="id" property="id"/>
+
+    <result
+      column="property_type"
+      property="propertyType"
+      javaType="com.hikari.rent.rental.enums.RentalPropertyType"
+      typeHandler="com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler"/>
 
     <result
       column="status"
@@ -26,113 +33,39 @@
 
   </resultMap>
 
+  <!-- Agent information mapping. -->
+  <resultMap
+    id="RentalAgentResultMap"
+    type="com.hikari.rent.rental.repository.model.RentalAgentRow">
+    <id column="id" property="id"/>
+    <result column="name" property="name"/>
+    <result column="avatar_storage_key" property="avatarStorageKey"/>
+    <result column="company" property="company"/>
+    <result column="business_hours" property="businessHours"/>
+    <result column="closed_days" property="closedDays"/>
+  </resultMap>
 
-  <select
-    id="selectManagementCompanyByRentalId"
-    resultType="com.hikari.rent.rental.repository.model.RentalManagementCompanyRow">
+  <!-- Management company information mapping. -->
+  <resultMap
+    id="RentalManagementCompanyResultMap"
+    type="com.hikari.rent.rental.repository.model.RentalManagementCompanyRow">
+    <result column="name" property="name"/>
+    <result column="address" property="address"/>
+    <result column="license_number" property="licenseNumber"/>
+    <result column="email" property="email"/>
+  </resultMap>
 
-    SELECT
-    mc.name,
-    mc.address,
-    mc.license_number,
-    mc.email
-
-    FROM rentals r
-
-    INNER JOIN companies mc
-    ON mc.id = r.management_company_id
-    AND mc.status = 1
-
-    WHERE r.id = #{rentalId}
-    AND r.status = 1
-    AND r.review_status = 2
-
-    AND EXISTS (
-    SELECT 1
-    FROM companies c
-    WHERE c.id = r.company_id
-    AND c.status = 1
-    )
-
-    AND EXISTS (
-    SELECT 1
-    FROM users u
-    WHERE u.id = r.agent_id
-    AND u.company_id = r.company_id
-    AND u.status = 1
-    )
-
-  </select>
-  <select
-    id="selectAgentByRentalId"
-    resultType="com.hikari.rent.rental.repository.model.RentalAgentRow">
-
-    SELECT
-    u.id,
-    u.nickname AS name,
-    f.storage_key AS avatar_storage_key,
-    c.name AS company,
-    c.business_hours,
-    c.closed_days
-
-    FROM rentals r
-
-    INNER JOIN users u
-    ON u.id = r.agent_id
-    AND u.company_id = r.company_id
-    AND u.status = 1
-
-    INNER JOIN companies c
-    ON c.id = r.company_id
-    AND c.status = 1
-
-    LEFT JOIN files f
-    ON f.id = u.avatar_file_id
-    AND f.status = 1
-
-    WHERE r.id = #{rentalId}
-    AND r.status = 1
-    AND r.review_status = 2
-
-  </select>
-  <select id="selectPublicById" resultMap="RentalResultMap">
-    SELECT r.*
-    FROM rentals r
-    WHERE r.id = #{id}
-    AND r.status = 1
-    AND r.review_status = 2
-
-    AND EXISTS (
-    SELECT 1
-    FROM companies c
-    WHERE c.id = r.company_id
-    AND c.status = 1
-    )
-
-    AND EXISTS (
-    SELECT 1
-    FROM users u
-    WHERE u.id = r.agent_id
-    AND u.company_id = r.company_id
-    AND u.status = 1
-    )
-  </select>
-
-  <select id="searchPage" resultMap="RentalResultMap">
-    SELECT r.*
-    FROM rentals r
-
+  <!-- Shared publication rules and search filters. -->
+  <sql id="RentalSearchWhere">
     WHERE r.status = 1
     AND r.review_status = 2
 
-
     AND EXISTS (
     SELECT 1
     FROM companies c
     WHERE c.id = r.company_id
     AND c.status = 1
     )
-
 
     AND EXISTS (
     SELECT 1
@@ -141,7 +74,6 @@
     AND u.company_id = r.company_id
     AND u.status = 1
     )
-
 
     <if test="query.keyword != null and query.keyword.trim() != ''">
       AND r.name LIKE CONCAT(
@@ -167,6 +99,17 @@
       AND r.area_code = #{query.areaCode}
     </if>
 
+    <if test="query.propertyTypes != null and query.propertyTypes.size() > 0">
+      AND r.property_type IN
+      <foreach
+        collection="query.propertyTypes"
+        item="propertyType"
+        open="("
+        separator=","
+        close=")">
+        #{propertyType}
+      </foreach>
+    </if>
 
     <if test="query.minRent != null">
       AND r.monthly_rent &gt;= #{query.minRent}
@@ -175,7 +118,6 @@
     <if test="query.maxRent != null">
       AND r.monthly_rent &lt;= #{query.maxRent}
     </if>
-
 
     <if test="query.floorPlans != null and query.floorPlans.size() > 0">
       AND r.floor_plan IN
@@ -222,6 +164,7 @@
       ) &lt;= #{query.maxBuildingAge}
     </if>
 
+    <!-- Station and walking constraints must match the same relation. -->
     <if test="query.stationId != null or query.maxWalkingMinutes != null">
       AND EXISTS (
       SELECT 1
@@ -233,12 +176,12 @@
       </if>
 
       <if test="query.maxWalkingMinutes != null">
-        AND rs.walking_minutes &lt;=
-        #{query.maxWalkingMinutes}
+        AND rs.walking_minutes &lt;= #{query.maxWalkingMinutes}
       </if>
       )
     </if>
 
+    <!-- Every selected feature must be present. -->
     <if test="query.featureCodes != null and query.featureCodes.size() > 0">
       <foreach
         collection="query.featureCodes"
@@ -247,6 +190,7 @@
         AND EXISTS (
         SELECT 1
         FROM rental_feature_relations rf
+
         INNER JOIN rental_features f
         ON f.id = rf.feature_id
 
@@ -257,7 +201,10 @@
 
       </foreach>
     </if>
+  </sql>
 
+  <!-- Shared sorting rules. -->
+  <sql id="RentalSearchOrder">
     <choose>
       <when test="query.sort == 'rentAsc'">
         ORDER BY r.monthly_rent ASC, r.id DESC
@@ -292,9 +239,35 @@
         ORDER BY r.published_at DESC, r.id DESC
       </otherwise>
     </choose>
+  </sql>
 
+  <!-- Paginated rental search. -->
+  <select id="searchPage" resultMap="RentalResultMap">
+    SELECT r.*
+    FROM rentals r
+
+    <include refid="RentalSearchWhere"/>
+
+    <include refid="RentalSearchOrder"/>
   </select>
-  <!-- 房源照片与户型图 -->
+
+  <!-- Map search; pagination limits are applied by MyBatis-Plus. -->
+  <select id="searchMap" resultMap="RentalResultMap">
+    SELECT r.*
+    FROM rentals r
+
+    <include refid="RentalSearchWhere"/>
+
+    AND r.latitude IS NOT NULL
+    AND r.longitude IS NOT NULL
+
+    AND r.latitude BETWEEN #{query.south} AND #{query.north}
+    AND r.longitude BETWEEN #{query.west} AND #{query.east}
+
+    <include refid="RentalSearchOrder"/>
+  </select>
+
+  <!-- Property photos and floor plans. -->
   <select
     id="selectImagesByRentalIds"
     resultType="com.hikari.rent.rental.repository.model.RentalImageRow">
@@ -314,7 +287,6 @@
     WHERE f.status = 1
     AND f.purpose = 'RENTAL_IMAGE'
 
-    <!-- 空列表返回空集，不能变成查询全部房源 -->
     <choose>
       <when test="rentalIds != null and rentalIds.size() > 0">
         AND ri.rental_id IN
@@ -338,11 +310,9 @@
     ri.kind ASC,
     ri.sort_order ASC,
     ri.id ASC
-
   </select>
 
-
-  <!-- 附近车站 -->
+  <!-- Nearby stations. -->
   <select
     id="selectStationsByRentalIds"
     resultType="com.hikari.rent.rental.repository.model.RentalStationRow">
@@ -383,11 +353,9 @@
     rs.rental_id ASC,
     rs.walking_minutes ASC,
     rs.station_id ASC
-
   </select>
 
-
-  <!-- 设备与入住条件 -->
+  <!-- Amenities and occupancy conditions. -->
   <select
     id="selectFeaturesByRentalIds"
     resultType="com.hikari.rent.rental.repository.model.RentalFeatureRow">
@@ -429,7 +397,149 @@
     f.category ASC,
     f.sort_order ASC,
     f.id ASC
+  </select>
 
+  <!-- Available feature options for search filters. -->
+  <select
+    id="selectFeatureOptions"
+    resultType="com.hikari.rent.rental.vo.RentalFeatureOptionVO">
+
+    SELECT
+    code,
+    name,
+    category
+
+    FROM rental_features
+
+    WHERE status = 1
+    AND category IN ('AMENITY', 'CONDITION')
+
+    ORDER BY
+    category ASC,
+    sort_order ASC,
+    id ASC
+  </select>
+  <!-- Load publicly available rentals for favorites and other consumers. -->
+  <select
+    id="selectPublicByIds"
+    resultMap="RentalResultMap">
+
+    SELECT r.*
+
+    FROM rentals r
+
+    WHERE r.status = 1
+    AND r.review_status = 2
+
+    AND EXISTS (
+    SELECT 1
+    FROM companies c
+    WHERE c.id = r.company_id
+    AND c.status = 1
+    )
+
+    AND EXISTS (
+    SELECT 1
+    FROM users u
+    WHERE u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+    )
+
+    <choose>
+      <when test="rentalIds != null and rentalIds.size() > 0">
+        AND r.id IN
+        <foreach
+          collection="rentalIds"
+          item="rentalId"
+          open="("
+          separator=","
+          close=")">
+          #{rentalId}
+        </foreach>
+      </when>
+
+      <otherwise>
+        AND 1 = 0
+      </otherwise>
+    </choose>
+
+  </select>
+
+  <select id="selectPublicById" resultMap="RentalResultMap">
+    SELECT r.*
+    FROM rentals r
+    WHERE r.id = #{id}
+    AND r.status = 1
+    AND r.review_status = 2
+    AND EXISTS (
+    SELECT 1
+    FROM companies c
+    WHERE c.id = r.company_id
+    AND c.status = 1
+    )
+    AND EXISTS (
+    SELECT 1
+    FROM users u
+    WHERE u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+    )
+  </select>
+  <!-- Load the active agent without exposing private contact fields. -->
+  <select
+    id="selectAgentByRentalId"
+    resultMap="RentalAgentResultMap">
+
+    SELECT
+    u.id,
+    u.nickname AS name,
+    f.storage_key AS avatar_storage_key,
+    c.name AS company,
+    c.business_hours,
+    c.closed_days
+    FROM rentals r
+    INNER JOIN users u
+    ON u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+    INNER JOIN companies c
+    ON c.id = r.company_id
+    AND c.status = 1
+    LEFT JOIN files f
+    ON f.id = u.avatar_file_id
+    AND f.owner_id = u.id
+    AND f.purpose = 'AVATAR'
+    AND f.status = 1
+    WHERE r.id = #{rentalId}
+    AND r.status = 1
+    AND r.review_status = 2
+  </select>
+
+  <!-- Load the assigned active management company for a public rental. -->
+  <select
+    id="selectManagementCompanyByRentalId"
+    resultMap="RentalManagementCompanyResultMap">
+
+    SELECT
+    mc.name,
+    mc.address,
+    mc.license_number,
+    mc.email
+    FROM rentals r
+    INNER JOIN companies mc
+    ON mc.id = r.management_company_id
+    AND mc.status = 1
+    INNER JOIN companies c
+    ON c.id = r.company_id
+    AND c.status = 1
+    INNER JOIN users u
+    ON u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+    WHERE r.id = #{rentalId}
+    AND r.status = 1
+    AND r.review_status = 2
   </select>
 
 </mapper>

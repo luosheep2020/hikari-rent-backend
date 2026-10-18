@@ -36,7 +36,7 @@ public class RentalPageRequest {
 
   @Positive(message = "Station ID must be positive")
   private Long stationId;
-
+  private List<@Min(1) @Max(3) Integer> propertyTypes;
   @PositiveOrZero(message = "Minimum rent must not be negative")
   @Max(value = 4294967295L, message = "Minimum rent is too large")
   private Long minRent;

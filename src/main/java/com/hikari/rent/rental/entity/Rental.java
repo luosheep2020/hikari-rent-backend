@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
+import com.hikari.rent.rental.enums.RentalPropertyType;
 import com.hikari.rent.rental.enums.RentalReviewStatus;
 import com.hikari.rent.rental.enums.RentalStatus;
 import lombok.Getter;
@@ -22,6 +23,8 @@ public class Rental {
   private Long id;
 
   private String name;
+
+  private RentalPropertyType propertyType;
 
   private String areaCode;
 

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.util.DisconnectedClientHelper;
 
 @Slf4j
 @RestControllerAdvice
@@ -43,12 +44,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     HttpStatusCode status,
     WebRequest request
   ) {
+    // Do not write another response after the client disconnects.
+    if (DisconnectedClientHelper.isClientDisconnectedException(ex)) {
+      log.debug("Client disconnected before the response completed");
+      return null;
+    }
+
     if (body instanceof ApiResponse<?>) {
       return super.handleExceptionInternal(
-        ex, body, headers, status, request
+        ex,
+        body,
+        headers,
+        status,
+        request
       );
     }
+
     String message;
+
     if (status.is5xxServerError()) {
       log.error("Request processing failed", ex);
       message = "Internal Server Error";
@@ -61,12 +74,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         default -> "Request processing failed";
       };
     }
+
     return super.handleExceptionInternal(
       ex,
-      ApiResponse.failure(status.value(),message),
+      ApiResponse.failure(status.value(), message),
       headers,
       status,
-      request);
+      request
+    );
   }
 
   @Override
@@ -91,20 +106,35 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     return handleExceptionInternal(
       ex,
-      ApiResponse.failure(400, message),
+      ApiResponse.failure(
+        ErrorCode.VALIDATION_FAILED.getCode(),
+        message
+      ),
       headers,
       status,
       request
     );
   }
 //  UnexpectedException
-  @ExceptionHandler(Exception.class)
-  public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(Exception ex){
-      log.error("Unhandled exception");
-
-      return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-        .body(ApiResponse.failure(500,"Internal Server Error"));
+@ExceptionHandler(Exception.class)
+public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(
+  Exception ex
+) {
+  if (DisconnectedClientHelper.isClientDisconnectedException(ex)) {
+    log.debug("Client disconnected before the response completed");
+    return null;
   }
+
+  log.error("Unhandled exception", ex);
+
+  ErrorCode errorCode = ErrorCode.INTERNAL_SERVER_ERROR;
+
+  return ResponseEntity.status(errorCode.getStatus())
+    .body(ApiResponse.failure(
+      errorCode.getCode(),
+      errorCode.getMessage()
+    ));
+}
   @ExceptionHandler(RentalNotFoundException.class)
   public ResponseEntity<ApiResponse<Void>> handleRentalNotFound(
     RentalNotFoundException exception

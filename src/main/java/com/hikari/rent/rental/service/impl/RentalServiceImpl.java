@@ -3,6 +3,7 @@ package com.hikari.rent.rental.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.hikari.rent.common.result.PageResult;
 import com.hikari.rent.file.service.FileUrlService;
+import com.hikari.rent.rental.dto.RentalMapRequest;
 import com.hikari.rent.rental.dto.RentalPageRequest;
 import com.hikari.rent.rental.entity.Rental;
 import com.hikari.rent.rental.exception.RentalNotFoundException;
@@ -33,63 +34,58 @@ public class RentalServiceImpl implements RentalService {
   @Resource
   private  FileUrlService fileUrlService;
 
+  private static final int MAP_RESULT_LIMIT = 200;
+
   @Override
   @Transactional(readOnly = true)
   public PageResult<RentalListVO> searchPage(
     RentalPageRequest request
   ) {
-    IPage<Rental> page =
-      rentalRepository.searchPage(request);
+    IPage<Rental> page = rentalRepository.searchPage(request);
 
-    List<Rental> rentals = page.getRecords();
+    return new PageResult<>(
+      page.getCurrent(),
+      page.getSize(),
+      page.getTotal(),
+      assembleListVOs(page.getRecords())
+    );
+  }
 
-    // 没有当前页记录，不再查询关联表。
+  private List<RentalListVO> assembleListVOs(
+    List<Rental> rentals
+  ) {
     if (rentals.isEmpty()) {
-      return new PageResult<>(
-        page.getCurrent(),
-        page.getSize(),
-        page.getTotal(),
-        List.of()
-      );
+      return List.of();
     }
 
     List<Long> rentalIds = rentals.stream()
       .map(Rental::getId)
       .toList();
 
-    // 三次批量读取，不在每套房源循环中查询数据库。
     Map<Long, List<RentalImageRow>> imagesByRental =
       rentalRepository.findImagesByRentalIds(rentalIds)
         .stream()
-        .collect(
-          Collectors.groupingBy(
-            RentalImageRow::getRentalId
-          )
-        );
+        .collect(Collectors.groupingBy(
+          RentalImageRow::getRentalId
+        ));
 
     Map<Long, List<RentalStationRow>> stationsByRental =
       rentalRepository.findStationsByRentalIds(rentalIds)
         .stream()
-        .collect(
-          Collectors.groupingBy(
-            RentalStationRow::getRentalId
-          )
-        );
+        .collect(Collectors.groupingBy(
+          RentalStationRow::getRentalId
+        ));
 
     Map<Long, List<RentalFeatureRow>> featuresByRental =
       rentalRepository.findFeaturesByRentalIds(rentalIds)
         .stream()
-        .collect(
-          Collectors.groupingBy(
-            RentalFeatureRow::getRentalId
-          )
-        );
+        .collect(Collectors.groupingBy(
+          RentalFeatureRow::getRentalId
+        ));
 
-    // 数据库时间约定为 UTC，同一页使用同一个计算时间。
-    LocalDateTime now =
-      LocalDateTime.now(ZoneOffset.UTC);
+    LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
-    List<RentalListVO> records = rentals.stream()
+    return rentals.stream()
       .map(rental -> toListVO(
         rental,
         imagesByRental.getOrDefault(
@@ -107,15 +103,7 @@ public class RentalServiceImpl implements RentalService {
         now
       ))
       .toList();
-
-    return new PageResult<>(
-      page.getCurrent(),
-      page.getSize(),
-      page.getTotal(),
-      records
-    );
   }
-
   private RentalListVO toListVO(
     Rental rental,
     List<RentalImageRow> images,
@@ -129,7 +117,11 @@ public class RentalServiceImpl implements RentalService {
     vo.setAreaCode(rental.getAreaCode());
     vo.setName(rental.getName());
     vo.setAddress(rental.getAddress());
-
+    vo.setPropertyType(
+      rental.getPropertyType() == null
+        ? null
+        : rental.getPropertyType().getValue()
+    );
     vo.setMonthlyRent(rental.getMonthlyRent());
     vo.setManagementFee(rental.getManagementFee());
     vo.setDepositMonths(rental.getDepositMonths());
@@ -428,5 +420,60 @@ public class RentalServiceImpl implements RentalService {
     }
 
     return years + "年" + remainingMonths + "か月";
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<RentalFeatureOptionVO> getFeatureOptions() {
+    return rentalRepository.findFeatureOptions();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public RentalMapVO searchMap(RentalMapRequest request) {
+    List<Rental> candidates = rentalRepository.searchMap(
+      request,
+      MAP_RESULT_LIMIT + 1
+    );
+
+    boolean hasMore = candidates.size() > MAP_RESULT_LIMIT;
+
+    List<Rental> rentals = hasMore
+      ? candidates.subList(0, MAP_RESULT_LIMIT)
+      : candidates;
+
+    return new RentalMapVO(
+      assembleListVOs(rentals),
+      hasMore,
+      MAP_RESULT_LIMIT
+    );
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<RentalListVO> getPublicListByIds(
+    List<Long> rentalIds
+  ) {
+    if (rentalIds == null || rentalIds.isEmpty()) {
+      return List.of();
+    }
+
+    List<Rental> rentals =
+      rentalRepository.findPublicByIds(rentalIds);
+
+    Map<Long, Rental> rentalsById = rentals.stream()
+      .collect(Collectors.toMap(
+        Rental::getId,
+        rental -> rental
+      ));
+
+    // Preserve the input order supplied by the favorites query.
+    List<Rental> orderedRentals = rentalIds.stream()
+      .distinct()
+      .map(rentalsById::get)
+      .filter(java.util.Objects::nonNull)
+      .toList();
+
+    return assembleListVOs(orderedRentals);
   }
 }

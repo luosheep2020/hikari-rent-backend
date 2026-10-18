@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.spring.repository.CrudRepository;
 import com.hikari.rent.area.entity.Area;
 import com.hikari.rent.area.mapper.AreaMapper;
 import com.hikari.rent.area.repository.AreaRepository;
+import com.hikari.rent.area.repository.model.AreaPopularityRow;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -38,5 +39,16 @@ public class AreaRepositoryImpl
         .orderByAsc(Area::getSortOrder)
         .orderByAsc(Area::getCode)
     );
+  }
+
+  @Override
+  public List<AreaPopularityRow> findPopularityAreasByCodes(
+    List<String> codes
+  ) {
+    if (codes == null || codes.isEmpty()) {
+      return List.of();
+    }
+
+    return baseMapper.selectPopularityAreasByCodes(codes);
   }
 }

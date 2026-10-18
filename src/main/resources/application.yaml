@@ -1,3 +1,6 @@
+app:
+  dev:
+    user-id: ${DEV_USER_ID:0}
 spring:
   application:
     name: hikari-rent-backend

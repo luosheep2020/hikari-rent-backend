@@ -2,9 +2,11 @@ package com.hikari.rent.rental.repository;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.repository.IRepository;
+import com.hikari.rent.rental.dto.RentalMapRequest;
 import com.hikari.rent.rental.dto.RentalPageRequest;
 import com.hikari.rent.rental.entity.Rental;
 import com.hikari.rent.rental.repository.model.*;
+import com.hikari.rent.rental.vo.RentalFeatureOptionVO;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,4 +34,13 @@ public interface RentalRepository extends IRepository<Rental> {
   Optional<RentalManagementCompanyRow> findManagementCompanyByRentalId(
     Long rentalId
   );
+
+  List<RentalFeatureOptionVO> findFeatureOptions();
+
+  List<Rental> searchMap(
+    RentalMapRequest request,
+    int fetchSize
+  );
+
+  List<Rental> findPublicByIds(List<Long> rentalIds);
 }
