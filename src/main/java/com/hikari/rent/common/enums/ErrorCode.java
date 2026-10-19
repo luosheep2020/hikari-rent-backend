@@ -161,23 +161,27 @@ public enum ErrorCode {
     HttpStatus.CONFLICT
   ),
 
-  // Conversations and messages.
-  CONVERSATION_NOT_FOUND(
-    60000, "Conversation not found", HttpStatus.NOT_FOUND
+  MESSAGE_SESSION_NOT_FOUND(
+    61001,
+    "Message session not found",
+    HttpStatus.NOT_FOUND
   ),
-  CONVERSATION_CLOSED(
-    60001, "Conversation is closed", HttpStatus.CONFLICT
-  ),
+
   MESSAGE_NOT_FOUND(
-    60002, "Message not found", HttpStatus.NOT_FOUND
+    61002,
+    "Message not found",
+    HttpStatus.NOT_FOUND
   ),
-  MESSAGE_EMPTY(
-    60003, "Message must contain text or an attachment",
+  MESSAGE_ATTACHMENTS_NOT_READY(
+    61003,
+    "Message image sending is not available yet",
     HttpStatus.BAD_REQUEST
   ),
-  MESSAGE_TOO_LONG(
-    60004, "Message exceeds the maximum length",
-    HttpStatus.BAD_REQUEST
+
+  MESSAGE_IDEMPOTENCY_CONFLICT(
+    61004,
+    "Client message ID has already been used for another message",
+    HttpStatus.CONFLICT
   ),
   MESSAGE_ATTACHMENT_LIMIT_EXCEEDED(
     60005, "Message attachment limit exceeded",
@@ -290,7 +294,9 @@ public enum ErrorCode {
   LAST_ADMIN_OPERATION_NOT_ALLOWED(
     90012, "The last active platform administrator must be retained",
     HttpStatus.CONFLICT
-  );
+  ),
+
+  ;
 
   private final int code;
   private final String message;

@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.message.mapper.MessageSessionMapper">
+
+  <!-- Resolve the active agent of a public rental. -->
+  <select
+    id="selectPublicRentalAgentId"
+    resultType="java.lang.Long">
+
+    SELECT r.agent_id
+
+    FROM rentals r
+
+    INNER JOIN companies c
+    ON c.id = r.company_id
+    AND c.status = 1
+
+    INNER JOIN users u
+    ON u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+
+    WHERE r.id = #{rentalId}
+    AND r.status = 1
+    AND r.review_status = 2
+  </select>
+
+  <!-- Reuse the participant pair and update the rental context. -->
+  <insert id="upsertSession">
+
+    INSERT INTO message_sessions (
+    customer_id,
+    agent_id,
+    last_rental_id,
+    created_at,
+    updated_at
+    )
+
+    VALUES (
+    #{customerId},
+    #{agentId},
+    #{rentalId},
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3)
+    )
+
+    ON DUPLICATE KEY UPDATE
+    last_rental_id = #{rentalId},
+    updated_at = UTC_TIMESTAMP(3)
+  </insert>
+
+  <!-- Read the session ID after the upsert. -->
+  <select
+    id="selectSessionId"
+    resultType="java.lang.Long">
+
+    SELECT id
+
+    FROM message_sessions
+
+    WHERE customer_id = #{customerId}
+    AND agent_id = #{agentId}
+  </select>
+
+  <!-- Return only sessions in which the current user participates. -->
+  <select
+    id="selectSessionPage"
+    resultType="com.hikari.rent.message.repository.model.MessageSessionRow">
+
+    SELECT
+    ms.id AS sessionId,
+
+    COALESCE(
+    ms.last_message_at,
+    ms.created_at
+    ) AS activityAt,
+
+    contact_user.id AS contactId,
+    contact_user.nickname AS contactName,
+
+    COALESCE(
+    contact_company.name,
+    ''
+    ) AS contactCompany,
+
+    avatar_file.storage_key AS avatarStorageKey,
+
+    r.id AS rentalId,
+    r.name AS rentalName,
+    image_file.storage_key AS imageStorageKey,
+    r.floor_plan AS floorPlan,
+    r.area_sqm AS area,
+    r.monthly_rent AS monthlyRent,
+
+    lm.id AS lastMessageId,
+    lm.sender_id AS lastSenderId,
+    lm.text AS lastMessageText,
+    lm.created_at AS lastMessageCreatedAt,
+
+    (
+    SELECT COUNT(*)
+
+    FROM message_attachments ma
+
+    WHERE ma.message_id = lm.id
+    ) AS lastImageCount,
+
+    (
+    SELECT COUNT(*)
+
+    FROM messages unread_message
+
+    WHERE unread_message.session_id = ms.id
+
+    AND unread_message.sender_id &lt;&gt; #{userId}
+
+    AND unread_message.id &gt; COALESCE(
+    CASE
+    WHEN ms.customer_id = #{userId}
+    THEN ms.customer_last_read_message_id
+    ELSE ms.agent_last_read_message_id
+    END,
+    0
+    )
+    ) AS unreadCount
+
+    FROM message_sessions ms
+
+    INNER JOIN users contact_user
+    ON contact_user.id = CASE
+    WHEN ms.customer_id = #{userId}
+    THEN ms.agent_id
+    ELSE ms.customer_id
+    END
+
+    LEFT JOIN companies contact_company
+    ON contact_company.id = contact_user.company_id
+
+    LEFT JOIN files avatar_file
+    ON avatar_file.id = contact_user.avatar_file_id
+    AND avatar_file.owner_id = contact_user.id
+    AND avatar_file.purpose = 'AVATAR'
+    AND avatar_file.status = 1
+
+    LEFT JOIN rentals r
+    ON r.id = ms.last_rental_id
+
+    LEFT JOIN files image_file
+    ON image_file.id = (
+    SELECT ri.file_id
+
+    FROM rental_images ri
+
+    INNER JOIN files photo_file
+    ON photo_file.id = ri.file_id
+    AND photo_file.status = 1
+    AND photo_file.purpose = 'RENTAL_IMAGE'
+
+    WHERE ri.rental_id = r.id
+    AND ri.kind = 'PHOTO'
+
+    ORDER BY
+    ri.sort_order ASC,
+    ri.id ASC
+
+    LIMIT 1
+    )
+
+    LEFT JOIN messages lm
+    ON lm.id = ms.last_message_id
+    AND lm.session_id = ms.id
+
+    WHERE (
+    ms.customer_id = #{userId}
+    OR ms.agent_id = #{userId}
+    )
+
+    <if test="beforeTime != null and beforeId != null">
+      AND (
+      COALESCE(
+      ms.last_message_at,
+      ms.created_at
+      ) &lt; #{beforeTime}
+
+      OR (
+      COALESCE(
+      ms.last_message_at,
+      ms.created_at
+      ) = #{beforeTime}
+
+      AND ms.id &lt; #{beforeId}
+      )
+      )
+    </if>
+
+    ORDER BY
+    COALESCE(
+    ms.last_message_at,
+    ms.created_at
+    ) DESC,
+
+    ms.id DESC
+
+    LIMIT #{limit}
+  </select>
+
+</mapper>

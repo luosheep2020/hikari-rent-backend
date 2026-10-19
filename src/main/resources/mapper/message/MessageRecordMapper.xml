@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.message.mapper.MessageRecordMapper">
+
+  <resultMap
+    id="MessageRecordResultMap"
+    type="com.hikari.rent.message.repository.model.MessageRecordRow">
+
+    <id column="id" property="id"/>
+
+    <result column="session_id" property="sessionId"/>
+    <result column="sender_id" property="senderId"/>
+
+    <result
+      column="client_message_id"
+      property="clientMessageId"/>
+
+    <result column="text" property="text"/>
+    <result column="created_at" property="createdAt"/>
+  </resultMap>
+
+  <!-- Verify that the current user belongs to the session. -->
+  <select
+    id="selectAccessibleSessionId"
+    resultType="java.lang.Long">
+
+    SELECT id
+
+    FROM message_sessions
+
+    WHERE id = #{sessionId}
+    AND (
+    customer_id = #{userId}
+    OR agent_id = #{userId}
+    )
+  </select>
+
+  <!-- Fetch the newest matching records first for cursor pagination. -->
+  <select
+    id="selectMessagePage"
+    resultMap="MessageRecordResultMap">
+
+    SELECT
+    m.id,
+    m.session_id,
+    m.sender_id,
+    m.client_message_id,
+    m.text,
+    m.created_at
+
+    FROM messages m
+
+    INNER JOIN message_sessions ms
+    ON ms.id = m.session_id
+
+    WHERE m.session_id = #{sessionId}
+
+    AND (
+    ms.customer_id = #{userId}
+    OR ms.agent_id = #{userId}
+    )
+
+    <if test="beforeId != null">
+      AND m.id &lt; #{beforeId}
+    </if>
+
+    ORDER BY m.id DESC
+
+    LIMIT #{limit}
+  </select>
+
+  <!-- Ensure the read position refers to a message in this session. -->
+  <select
+    id="selectMessageId"
+    resultType="java.lang.Long">
+
+    SELECT id
+
+    FROM messages
+
+    WHERE id = #{messageId}
+    AND session_id = #{sessionId}
+  </select>
+
+  <!-- Read positions can only advance. -->
+  <update id="updateReadPosition">
+
+    UPDATE message_sessions
+
+    SET
+    customer_last_read_message_id = CASE
+    WHEN customer_id = #{userId}
+    THEN GREATEST(
+    COALESCE(customer_last_read_message_id, 0),
+    #{messageId}
+    )
+    ELSE customer_last_read_message_id
+    END,
+
+    agent_last_read_message_id = CASE
+    WHEN agent_id = #{userId}
+    THEN GREATEST(
+    COALESCE(agent_last_read_message_id, 0),
+    #{messageId}
+    )
+    ELSE agent_last_read_message_id
+    END
+
+    WHERE id = #{sessionId}
+
+    AND (
+    customer_id = #{userId}
+    OR agent_id = #{userId}
+    )
+  </update>
+  <!-- Lock the session and verify participant access. -->
+  <select
+    id="selectAccessibleSessionIdForUpdate"
+    resultType="java.lang.Long">
+
+    SELECT id
+    FROM message_sessions
+
+    WHERE id = #{sessionId}
+
+    AND (
+    customer_id = #{userId}
+    OR agent_id = #{userId}
+    )
+
+    FOR UPDATE
+
+  </select>
+
+
+  <!-- Reuse the existing message when the client retries. -->
+  <insert id="insertOrReuseMessage">
+
+    INSERT INTO messages (
+    session_id,
+    sender_id,
+    client_message_id,
+    rental_id,
+    text,
+    created_at
+    )
+
+    SELECT
+    ms.id,
+    #{userId},
+    #{clientMessageId},
+    ms.last_rental_id,
+    #{text},
+    UTC_TIMESTAMP(3)
+
+    FROM message_sessions ms
+
+    WHERE ms.id = #{sessionId}
+
+    AND (
+    ms.customer_id = #{userId}
+    OR ms.agent_id = #{userId}
+    )
+
+    ON DUPLICATE KEY UPDATE
+    id = messages.id
+
+  </insert>
+
+
+  <!-- Use a current read to retrieve the persisted message. -->
+  <select
+    id="selectMessageByClientId"
+    resultMap="MessageRecordResultMap">
+
+    SELECT
+    id,
+    session_id,
+    sender_id,
+    client_message_id,
+    text,
+    created_at
+
+    FROM messages
+
+    WHERE sender_id = #{userId}
+    AND client_message_id = #{clientMessageId}
+
+    FOR UPDATE
+
+  </select>
+
+
+  <!-- Retrying an older message must not replace the latest preview. -->
+  <update id="updateLatestMessage">
+
+    UPDATE message_sessions
+
+    SET
+    last_message_id = #{messageId},
+    last_message_at = #{createdAt}
+
+    WHERE id = #{sessionId}
+
+    AND (
+    last_message_id IS NULL
+    OR last_message_id &lt; #{messageId}
+    )
+
+  </update>
+</mapper>

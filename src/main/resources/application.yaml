@@ -1,6 +1,10 @@
 app:
   dev:
     user-id: ${DEV_USER_ID:0}
+  history:
+    sync:
+      initial-delay-ms: 10000
+      fixed-delay-ms: 10000
 spring:
   application:
     name: hikari-rent-backend
