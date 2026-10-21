@@ -12,7 +12,6 @@ import com.hikari.rent.rental.repository.model.*;
 import com.hikari.rent.rental.service.RentalService;
 import com.hikari.rent.rental.vo.*;
 import jakarta.annotation.Resource;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +31,7 @@ public class RentalServiceImpl implements RentalService {
   private  RentalRepository rentalRepository;
 
   @Resource
-  private  FileUrlService fileUrlService;
+  private FileUrlService fileUrlService;
 
   private static final int MAP_RESULT_LIMIT = 200;
 

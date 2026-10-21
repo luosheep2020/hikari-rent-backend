@@ -1,0 +1,590 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.rental.mapper.AdminRentalMapper">
+
+  <resultMap
+    id="AdminRentalListResultMap"
+    type="com.hikari.rent.rental.vo.admin.AdminRentalListVO">
+
+    <id column="id" property="id"/>
+
+    <result column="name" property="name"/>
+    <result column="area_code" property="areaCode"/>
+    <result column="address" property="address"/>
+    <result column="property_type" property="propertyType"/>
+
+    <result column="monthly_rent" property="monthlyRent"/>
+    <result column="management_fee" property="managementFee"/>
+
+    <result column="floor_plan" property="floorPlan"/>
+    <result column="area" property="area"/>
+
+    <result column="status" property="status"/>
+    <result column="review_status" property="reviewStatus"/>
+
+    <result column="agent_id" property="agentId"/>
+    <result column="agent_name" property="agentName"/>
+
+    <result column="published_at" property="publishedAt"/>
+    <result column="updated_at" property="updatedAt"/>
+
+  </resultMap>
+
+
+  <!-- Resolve the company from the current active employee. -->
+  <select
+    id="selectActiveCompanyId"
+    resultType="java.lang.Long">
+
+    SELECT u.company_id
+
+    FROM users u
+
+    INNER JOIN companies c
+    ON c.id = u.company_id
+    AND c.status = 1
+
+    WHERE u.id = #{userId}
+    AND u.status = 1
+
+  </select>
+
+
+  <!-- Management queries include all publication and review states. -->
+  <select
+    id="searchPage"
+    resultMap="AdminRentalListResultMap">
+
+    SELECT
+    CAST(r.id AS CHAR) AS id,
+    r.name,
+    r.area_code,
+    r.address,
+    r.property_type,
+
+    r.monthly_rent,
+    r.management_fee,
+
+    r.floor_plan,
+    r.area_sqm AS area,
+
+    r.status,
+    r.review_status,
+
+    CAST(r.agent_id AS CHAR) AS agent_id,
+    agent.nickname AS agent_name,
+
+    r.published_at,
+    r.updated_at
+
+    FROM rentals r
+
+    INNER JOIN companies c
+    ON c.id = r.company_id
+    AND c.status = 1
+
+    INNER JOIN users current_user_scope
+    ON current_user_scope.id = #{userId}
+    AND current_user_scope.company_id = r.company_id
+    AND current_user_scope.status = 1
+
+    LEFT JOIN users agent
+    ON agent.id = r.agent_id
+
+    WHERE r.company_id = #{companyId}
+
+    <if test="query.keyword != null and query.keyword.trim() != ''">
+      AND r.name LIKE CONCAT(
+      '%',
+      REPLACE(
+      REPLACE(
+      REPLACE(
+      TRIM(#{query.keyword}),
+      '=',
+      '=='
+      ),
+      '%',
+      '=%'
+      ),
+      '_',
+      '=_'
+      ),
+      '%'
+      ) ESCAPE '='
+    </if>
+
+    <if test="query.areaCode != null and query.areaCode != ''">
+      AND r.area_code = #{query.areaCode}
+    </if>
+
+    <if test="query.propertyType != null">
+      AND r.property_type = #{query.propertyType}
+    </if>
+
+    <if test="query.status != null">
+      AND r.status = #{query.status}
+    </if>
+
+    <if test="query.reviewStatus != null">
+      AND r.review_status = #{query.reviewStatus}
+    </if>
+
+    ORDER BY
+    r.updated_at DESC,
+    r.id DESC
+
+  </select>
+
+  <resultMap
+    id="AdminRentalDetailResultMap"
+    type="com.hikari.rent.rental.vo.admin.AdminRentalDetailVO"
+    extends="AdminRentalListResultMap">
+
+    <result
+      column="company_id"
+      property="companyId"/>
+
+    <result
+      column="management_company_id"
+      property="managementCompanyId"/>
+
+    <result column="postal_code" property="postalCode"/>
+    <result column="description" property="description"/>
+
+    <result column="deposit_months" property="depositMonths"/>
+    <result column="key_money_months" property="keyMoneyMonths"/>
+    <result column="brokerage_fee" property="brokerageFee"/>
+    <result column="guarantee_fee" property="guaranteeFee"/>
+    <result column="renewal_fee" property="renewalFee"/>
+
+    <result column="floor" property="floor"/>
+    <result column="total_floors" property="totalFloors"/>
+    <result column="built_year" property="builtYear"/>
+    <result column="built_month" property="builtMonth"/>
+    <result column="direction" property="direction"/>
+
+    <result
+      column="building_structure"
+      property="buildingStructure"/>
+
+    <result column="available_from" property="availableFrom"/>
+
+    <result
+      column="available_from_text"
+      property="availableFromText"/>
+
+    <result column="contract_type" property="contractType"/>
+    <result column="contract_months" property="contractMonths"/>
+
+    <result
+      column="guarantee_company"
+      property="guaranteeCompany"/>
+
+    <result column="latitude" property="latitude"/>
+    <result column="longitude" property="longitude"/>
+
+    <result column="submitted_at" property="submittedAt"/>
+    <result column="reviewed_by" property="reviewedBy"/>
+    <result column="reviewed_at" property="reviewedAt"/>
+    <result column="review_remark" property="reviewRemark"/>
+    <result column="version" property="version"/>
+
+  </resultMap>
+
+
+  <!-- Read all rental states within the current employee's company. -->
+  <select
+    id="selectDetail"
+    resultMap="AdminRentalDetailResultMap">
+
+    SELECT
+    CAST(r.id AS CHAR) AS id,
+
+    r.name,
+    r.area_code,
+    r.address,
+    r.postal_code,
+    r.description,
+    r.property_type,
+
+    r.monthly_rent,
+    r.management_fee,
+    r.deposit_months,
+    r.key_money_months,
+    r.brokerage_fee,
+    r.guarantee_fee,
+    r.renewal_fee,
+
+    r.floor_plan,
+    r.area_sqm AS area,
+
+    r.floor,
+    r.total_floors,
+    r.built_year,
+    r.built_month,
+    r.direction,
+    r.building_structure,
+
+    r.available_from,
+    r.available_from_text,
+    r.contract_type,
+    r.contract_months,
+    r.guarantee_company,
+
+    r.latitude,
+    r.longitude,
+
+    CAST(r.company_id AS CHAR) AS company_id,
+    CAST(r.management_company_id AS CHAR)
+    AS management_company_id,
+
+    CAST(r.agent_id AS CHAR) AS agent_id,
+    agent.nickname AS agent_name,
+
+    r.status,
+    r.review_status,
+
+    r.submitted_at,
+    CAST(r.reviewed_by AS CHAR) AS reviewed_by,
+    r.reviewed_at,
+    r.review_remark,
+
+    r.published_at,
+    r.updated_at,
+    r.version
+
+    FROM rentals r
+
+    INNER JOIN companies c
+    ON c.id = r.company_id
+    AND c.status = 1
+
+    INNER JOIN users current_user_scope
+    ON current_user_scope.id = #{userId}
+    AND current_user_scope.company_id = r.company_id
+    AND current_user_scope.status = 1
+
+    LEFT JOIN users agent
+    ON agent.id = r.agent_id
+
+    WHERE r.id = #{rentalId}
+    AND r.company_id = #{companyId}
+
+  </select>
+
+  <!-- Validate a municipality-level area. -->
+  <select id="countMunicipality" resultType="int">
+
+    SELECT COUNT(*)
+    FROM areas
+    WHERE code = #{areaCode}
+    AND level = 3
+
+  </select>
+
+
+  <!-- Validate the assigned employee within the current company. -->
+  <select id="countActiveEmployee" resultType="int">
+
+    SELECT COUNT(*)
+    FROM users
+    WHERE id = #{userId}
+    AND company_id = #{companyId}
+    AND status = 1
+
+  </select>
+
+
+  <select id="countActiveCompany" resultType="int">
+
+    SELECT COUNT(*)
+    FROM companies
+    WHERE id = #{companyId}
+    AND status = 1
+
+  </select>
+
+
+  <select id="countActiveStations" resultType="int">
+
+    SELECT COUNT(*)
+    FROM stations
+    WHERE status = 1
+    AND id IN
+
+    <foreach
+      collection="stationIds"
+      item="stationId"
+      open="("
+      separator=","
+      close=")">
+      #{stationId}
+    </foreach>
+
+  </select>
+
+
+  <select id="countActiveFeatures" resultType="int">
+
+    SELECT COUNT(*)
+    FROM rental_features
+    WHERE status = 1
+    AND code IN
+
+    <foreach
+      collection="featureCodes"
+      item="featureCode"
+      open="("
+      separator=","
+      close=")">
+      #{featureCode}
+    </foreach>
+
+  </select>
+
+
+  <!-- Publication and review states are controlled by the server. -->
+  <insert
+    id="insertDraft"
+    useGeneratedKeys="true"
+    keyProperty="rental.id"
+    keyColumn="id">
+
+    INSERT INTO rentals (
+    name,
+    area_code,
+    postal_code,
+    address,
+    description,
+    property_type,
+
+    monthly_rent,
+    management_fee,
+    deposit_months,
+    key_money_months,
+    brokerage_fee,
+    guarantee_fee,
+    renewal_fee,
+
+    floor_plan,
+    area_sqm,
+    floor,
+    total_floors,
+    built_year,
+    built_month,
+    direction,
+    building_structure,
+
+    available_from,
+    available_from_text,
+    contract_type,
+    contract_months,
+    guarantee_company,
+
+    latitude,
+    longitude,
+
+    company_id,
+    agent_id,
+    management_company_id,
+
+    status,
+    review_status,
+    created_by,
+    updated_by,
+    version,
+    created_at,
+    updated_at
+    )
+
+    VALUES (
+    #{rental.values.name},
+    #{rental.values.areaCode},
+    #{rental.values.postalCode},
+    #{rental.values.address},
+    #{rental.values.description},
+    #{rental.values.propertyType},
+
+    #{rental.values.monthlyRent},
+    #{rental.values.managementFee},
+    #{rental.values.depositMonths},
+    #{rental.values.keyMoneyMonths},
+    #{rental.values.brokerageFee},
+    #{rental.values.guaranteeFee},
+    #{rental.values.renewalFee},
+
+    #{rental.values.floorPlan},
+    #{rental.values.area},
+    #{rental.values.floor},
+    #{rental.values.totalFloors},
+    #{rental.values.builtYear},
+    #{rental.values.builtMonth},
+    #{rental.values.direction},
+    #{rental.values.buildingStructure},
+
+    #{rental.values.availableFrom},
+    #{rental.values.availableFromText},
+    #{rental.values.contractType},
+    #{rental.values.contractMonths},
+    #{rental.values.guaranteeCompany},
+
+    #{rental.values.latitude},
+    #{rental.values.longitude},
+
+    #{rental.companyId},
+    #{rental.agentId},
+    #{rental.values.managementCompanyId},
+
+    0,
+    0,
+    #{rental.operatorId},
+    #{rental.operatorId},
+    0,
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3)
+    )
+
+  </insert>
+
+
+  <!-- Insert only stations that remain active. -->
+  <insert id="insertStationRelations">
+
+    INSERT INTO rental_stations (
+    rental_id,
+    station_id,
+    walking_minutes
+    )
+
+    SELECT
+    #{rentalId},
+    s.id,
+    selected.walking_minutes
+
+    FROM stations s
+
+    INNER JOIN (
+    <foreach
+      collection="stations"
+      item="station"
+      separator=" UNION ALL ">
+
+      SELECT
+      #{station.stationId} AS station_id,
+      #{station.walkingMinutes} AS walking_minutes
+
+    </foreach>
+    ) selected
+    ON selected.station_id = s.id
+
+    WHERE s.status = 1
+
+  </insert>
+
+
+  <!-- Resolve feature IDs from the submitted codes. -->
+  <insert id="insertFeatureRelations">
+
+    INSERT INTO rental_feature_relations (
+    rental_id,
+    feature_id
+    )
+
+    SELECT
+    #{rentalId},
+    f.id
+
+    FROM rental_features f
+
+    WHERE f.status = 1
+    AND f.code IN
+
+    <foreach
+      collection="featureCodes"
+      item="featureCode"
+      open="("
+      separator=","
+      close=")">
+      #{featureCode}
+    </foreach>
+  </insert>
+
+  <!-- Update editable rentals with an explicit version check. -->
+  <update id="updateDraft">
+
+    UPDATE rentals
+
+    SET
+    name = #{rental.values.name},
+    area_code = #{rental.values.areaCode},
+    postal_code = #{rental.values.postalCode},
+    address = #{rental.values.address},
+    description = #{rental.values.description},
+    property_type = #{rental.values.propertyType},
+
+    monthly_rent = #{rental.values.monthlyRent},
+    management_fee = #{rental.values.managementFee},
+    deposit_months = #{rental.values.depositMonths},
+    key_money_months = #{rental.values.keyMoneyMonths},
+    brokerage_fee = #{rental.values.brokerageFee},
+    guarantee_fee = #{rental.values.guaranteeFee},
+    renewal_fee = #{rental.values.renewalFee},
+
+    floor_plan = #{rental.values.floorPlan},
+    area_sqm = #{rental.values.area},
+    floor = #{rental.values.floor},
+    total_floors = #{rental.values.totalFloors},
+    built_year = #{rental.values.builtYear},
+    built_month = #{rental.values.builtMonth},
+    direction = #{rental.values.direction},
+    building_structure = #{rental.values.buildingStructure},
+
+    available_from = #{rental.values.availableFrom},
+    available_from_text = #{rental.values.availableFromText},
+    contract_type = #{rental.values.contractType},
+    contract_months = #{rental.values.contractMonths},
+    guarantee_company = #{rental.values.guaranteeCompany},
+
+    latitude = #{rental.values.latitude},
+    longitude = #{rental.values.longitude},
+
+    agent_id = #{rental.agentId},
+    management_company_id = #{rental.values.managementCompanyId},
+
+    review_status = 0,
+    submitted_at = NULL,
+    reviewed_by = NULL,
+    reviewed_at = NULL,
+    review_remark = NULL,
+
+    updated_by = #{rental.operatorId},
+    updated_at = UTC_TIMESTAMP(3),
+    version = version + 1
+
+    WHERE id = #{rental.id}
+    AND company_id = #{rental.companyId}
+    AND version = #{rental.values.version}
+    AND status IN (0, 3)
+    AND review_status != 1
+
+  </update>
+
+
+  <delete id="deleteStationRelations">
+
+    DELETE FROM rental_stations
+    WHERE rental_id = #{rentalId}
+
+  </delete>
+
+
+  <delete id="deleteFeatureRelations">
+
+    DELETE FROM rental_feature_relations
+    WHERE rental_id = #{rentalId}
+
+  </delete>
+</mapper>

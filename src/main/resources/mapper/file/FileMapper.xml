@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.file.mapper.FileMapper">
+
+  <insert
+    id="insertFile"
+    useGeneratedKeys="true"
+    keyProperty="file.id"
+    keyColumn="id">
+
+    INSERT INTO files (
+    owner_id,
+    storage_key,
+    original_name,
+    mime_type,
+    size_bytes,
+    purpose,
+    status,
+    created_at
+    )
+    VALUES (
+    #{file.ownerId},
+    #{file.storageKey},
+    #{file.originalName},
+    #{file.mimeType},
+    #{file.sizeBytes},
+    #{file.purpose},
+    1,
+    UTC_TIMESTAMP(3)
+    )
+
+  </insert>
+
+</mapper>

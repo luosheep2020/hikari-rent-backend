@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.auth.mapper.AuthAccountMapper">
+
+  <resultMap
+    id="AuthAccountResultMap"
+    type="com.hikari.rent.auth.repository.model.AuthAccountRow">
+
+    <id
+      column="id"
+      property="id"/>
+
+    <result
+      column="email"
+      property="email"/>
+
+    <result
+      column="password_hash"
+      property="passwordHash"/>
+
+    <result
+      column="nickname"
+      property="nickname"/>
+
+    <result
+      column="phone"
+      property="phone"/>
+
+    <result
+      column="avatar_storage_key"
+      property="avatarStorageKey"/>
+
+    <result
+      column="company_id"
+      property="companyId"/>
+
+    <result
+      column="status"
+      property="status"/>
+
+    <result
+      column="password_changed_at"
+      property="passwordChangedAt"/>
+
+  </resultMap>
+
+  <sql id="AccountQuery">
+    SELECT
+    u.id,
+    u.email,
+    u.password_hash,
+    u.nickname,
+    u.phone,
+    u.company_id,
+    u.status,
+    u.password_changed_at,
+    f.storage_key AS avatar_storage_key
+
+    FROM users u
+
+    LEFT JOIN files f
+    ON f.id = u.avatar_file_id
+    AND f.owner_id = u.id
+    AND f.status = 1
+    AND f.purpose = 'AVATAR'
+  </sql>
+
+  <!-- Find the account used for password authentication. -->
+  <select
+    id="selectByEmail"
+    resultMap="AuthAccountResultMap">
+
+    <include refid="AccountQuery"/>
+
+    WHERE u.email = #{email}
+
+  </select>
+
+  <!-- Reload the account when validating an authenticated request. -->
+  <select
+    id="selectById"
+    resultMap="AuthAccountResultMap">
+
+    <include refid="AccountQuery"/>
+
+    WHERE u.id = #{userId}
+
+  </select>
+
+  <!-- Only active users and active roles grant authorities. -->
+  <select
+    id="selectActiveRoles"
+    resultType="java.lang.String">
+
+    SELECT DISTINCT
+    r.code
+
+    FROM user_roles ur
+
+    INNER JOIN users u
+    ON u.id = ur.user_id
+    AND u.status = 1
+
+    INNER JOIN roles r
+    ON r.id = ur.role_id
+    AND r.status = 1
+
+    WHERE ur.user_id = #{userId}
+
+    ORDER BY r.code ASC
+
+  </select>
+
+
+  <!-- Resolve the active role assigned to public registrations. -->
+  <select
+    id="selectUserRoleId"
+    resultType="java.lang.Long">
+
+    SELECT id
+    FROM roles
+    WHERE code = 'USER'
+    AND scope = 'SELF'
+    AND status = 1
+
+  </select>
+
+  <!-- Create a normal user without company membership. -->
+  <insert
+    id="insertAccount"
+    useGeneratedKeys="true"
+    keyProperty="account.id"
+    keyColumn="id">
+
+    INSERT INTO users (
+    email,
+    password_hash,
+    nickname,
+    status,
+    password_changed_at,
+    created_at,
+    updated_at
+    )
+    VALUES (
+    #{account.email},
+    #{account.passwordHash},
+    #{account.nickname},
+    1,
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3)
+    )
+
+  </insert>
+
+  <!-- Recheck the role before assigning it. -->
+  <insert id="insertUserRole">
+
+    INSERT INTO user_roles (
+    user_id,
+    role_id,
+    created_at
+    )
+    SELECT
+    #{userId},
+    r.id,
+    UTC_TIMESTAMP(3)
+    FROM roles r
+    WHERE r.id = #{roleId}
+    AND r.code = 'USER'
+    AND r.scope = 'SELF'
+    AND r.status = 1
+
+  </insert>
+</mapper>

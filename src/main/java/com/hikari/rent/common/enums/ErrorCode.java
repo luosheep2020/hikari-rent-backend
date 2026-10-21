@@ -193,7 +193,28 @@ public enum ErrorCode {
   MESSAGE_RECALL_NOT_ALLOWED(
     60007, "Message cannot be recalled", HttpStatus.CONFLICT
   ),
+  RENTAL_MANAGEMENT_FORBIDDEN(
+    62001,
+    "Rental management access is denied",
+    HttpStatus.FORBIDDEN
+  ),
 
+  RENTAL_DRAFT_INVALID(
+    62002,
+    "Invalid rental draft values or related records",
+    HttpStatus.BAD_REQUEST
+  ),
+  RENTAL_VERSION_CONFLICT(
+    62003,
+    "The rental has changed. Refresh the page and try again",
+    HttpStatus.CONFLICT
+  ),
+
+  RENTAL_EDIT_NOT_ALLOWED(
+    62004,
+    "Only draft or unpublished rentals outside review can be edited",
+    HttpStatus.CONFLICT
+  ),
   // Files and object storage.
   FILE_NOT_FOUND(
     70000, "File not found", HttpStatus.NOT_FOUND
