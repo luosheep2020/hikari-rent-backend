@@ -30,9 +30,12 @@ import java.util.List;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+
   @Resource
   private RedisJwtAuthenticationConverter jwtAuthenticationConverter;
-  private final JsonMapper jsonMapper = JsonMapper.builder().build();
+
+  private final JsonMapper jsonMapper =
+    JsonMapper.builder().build();
 
   @Bean
   public SecurityFilterChain securityFilterChain(
@@ -40,7 +43,7 @@ public class SecurityConfig {
   ) throws Exception {
 
     http
-      // Authentication will use bearer tokens instead of cookies.
+      // Authentication uses bearer tokens instead of session cookies.
       .csrf(AbstractHttpConfigurer::disable)
 
       .cors(cors ->
@@ -77,7 +80,7 @@ public class SecurityConfig {
 
       .authorizeHttpRequests(authorize ->
         authorize
-          // Allow error dispatches without replacing the original error.
+          // Preserve the original error during error dispatch.
           .dispatcherTypeMatchers(DispatcherType.ERROR)
           .permitAll()
 
@@ -85,14 +88,15 @@ public class SecurityConfig {
           .requestMatchers(HttpMethod.OPTIONS, "/**")
           .permitAll()
 
-          // Public authentication endpoint.
+          // Public authentication endpoints.
           .requestMatchers(
             HttpMethod.POST,
             "/api/auth/login",
             "/api/auth/register"
           )
           .permitAll()
-          // Public rental queries.
+
+          // Public rental and reference-data queries.
           .requestMatchers(
             HttpMethod.GET,
             "/api/rentals",
@@ -106,15 +110,26 @@ public class SecurityConfig {
           )
           .permitAll()
 
-          // Rental review is restricted to platform administrators.
+          // Review rules must precede general rental-management rules.
           .requestMatchers(
-            "/api/admin/rentals/*/review",
+            "/api/admin/rentals/review/*",
             "/api/admin/rentals/*/approve",
             "/api/admin/rentals/*/reject"
           )
           .hasRole("PLATFORM_ADMIN")
 
-          // Data ownership must also be checked in the business layer.
+          // Authorized managers may submit rentals for review.
+          .requestMatchers(
+            HttpMethod.POST,
+            "/api/admin/rentals/*/submit-review"
+          )
+          .hasAnyRole(
+            "PLATFORM_ADMIN",
+            "COMPANY_ADMIN",
+            "AGENT"
+          )
+
+          // Rental ownership is additionally enforced by the service and SQL.
           .requestMatchers(
             "/api/admin/rentals",
             "/api/admin/rentals/**"
@@ -124,12 +139,22 @@ public class SecurityConfig {
             "COMPANY_ADMIN",
             "AGENT"
           )
-
-          // Other platform management endpoints.
+// Company administrators may manage their own organization data.
+          .requestMatchers(
+            "/api/admin/departments",
+            "/api/admin/departments/**",
+            "/api/admin/positions",
+            "/api/admin/positions/**"
+          )
+          .hasAnyRole(
+            "PLATFORM_ADMIN",
+            "COMPANY_ADMIN"
+          )
+          // Other administrative endpoints require platform access.
           .requestMatchers("/api/admin/**")
           .hasRole("PLATFORM_ADMIN")
 
-          // Authenticated user endpoints.
+          // User endpoints require an authenticated account.
           .requestMatchers(
             "/api/auth/me",
             "/api/auth/logout",
@@ -137,15 +162,20 @@ public class SecurityConfig {
             "/api/messages/**"
           )
           .authenticated()
+
+          // File-purpose and ownership checks remain in the service.
           .requestMatchers(
             HttpMethod.POST,
             "/api/files/upload"
           )
           .authenticated()
-          // New endpoints require an explicit access rule.
+
+          // Require explicit rules for other endpoints.
           .anyRequest()
           .denyAll()
-      ).oauth2ResourceServer(resource ->
+      )
+
+      .oauth2ResourceServer(resource ->
         resource
           .jwt(jwt ->
             jwt.jwtAuthenticationConverter(
@@ -163,7 +193,7 @@ public class SecurityConfig {
                 "Access denied"
               )
           )
-      );;
+      );
 
     return http.build();
   }
@@ -178,7 +208,10 @@ public class SecurityConfig {
     CorsConfiguration configuration = new CorsConfiguration();
 
     configuration.setAllowedOrigins(
-      List.of("http://localhost:3000")
+      List.of(
+        "http://localhost:3000",
+        "http://localhost:5173"
+      )
     );
 
     configuration.setAllowedMethods(

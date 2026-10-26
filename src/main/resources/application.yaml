@@ -1,6 +1,4 @@
 app:
-  dev:
-    user-id: ${DEV_USER_ID:2}
   jwt:
     secret-base64: ${JWT_SECRET_BASE64}
     issuer: hikari-rent
@@ -9,11 +7,15 @@ app:
     sync:
       initial-delay-ms: 10000
       fixed-delay-ms: 10000
-  app:
-    elasticsearch:
-      uri: ${ELASTICSEARCH_URI}
-      username: ${ELASTICSEARCH_USERNAME:}
-      password: ${ELASTICSEARCH_PASSWORD:}
+  elasticsearch:
+    uri: ${ELASTICSEARCH_URI}
+    username: ${ELASTICSEARCH_USERNAME:}
+    password: ${ELASTICSEARCH_PASSWORD:}
+    sync:
+      enabled: true
+      initial-delay-ms: 10000
+      fixed-delay-ms: 3000
+
 spring:
   application:
     name: hikari-rent-backend

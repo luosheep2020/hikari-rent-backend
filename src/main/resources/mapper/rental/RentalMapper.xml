@@ -541,5 +541,107 @@
     AND r.status = 1
     AND r.review_status = 2
   </select>
+  <select
+    id="selectIndexUpperId"
+    resultType="java.lang.Long">
 
+    SELECT COALESCE(MAX(id), 0)
+    FROM rentals
+
+  </select>
+
+  <select
+    id="selectPublicIndexBatch"
+    resultType="com.hikari.rent.rental.repository.model.RentalIndexRow">
+
+    SELECT
+    r.id,
+    r.name,
+    r.address,
+    r.description,
+    r.area_code AS areaCode,
+    r.property_type AS propertyType,
+    r.monthly_rent AS monthlyRent,
+    r.management_fee AS managementFee,
+    r.floor_plan AS floorPlan,
+    r.area_sqm AS area,
+    r.built_year AS builtYear,
+    r.built_month AS builtMonth,
+    r.latitude,
+    r.longitude,
+    r.published_at AS publishedAt,
+    r.company_id AS companyId,
+    r.agent_id AS agentId
+
+    FROM rentals r
+
+    INNER JOIN companies c
+    ON c.id = r.company_id
+    AND c.status = 1
+
+    INNER JOIN users u
+    ON u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+
+    WHERE r.status = 1
+    AND r.review_status = 2
+    AND r.id &gt; #{afterId}
+    AND r.id &lt;= #{upperId}
+
+    ORDER BY r.id ASC
+
+    LIMIT #{limit}
+
+  </select>
+
+  <select
+    id="selectIndexAreas"
+    resultType="com.hikari.rent.rental.repository.model.RentalIndexAreaRow">
+
+    SELECT
+    code,
+    parent_code AS parentCode
+    FROM areas
+
+  </select>
+
+  <select
+    id="selectPublicRentalsByIds"
+    resultMap="RentalResultMap">
+
+    SELECT r.*
+    FROM rentals r
+
+    INNER JOIN companies c
+    ON c.id = r.company_id
+    AND c.status = 1
+
+    INNER JOIN users u
+    ON u.id = r.agent_id
+    AND u.company_id = r.company_id
+    AND u.status = 1
+
+    WHERE r.status = 1
+    AND r.review_status = 2
+
+    <choose>
+      <when test="rentalIds != null and rentalIds.size() > 0">
+        AND r.id IN
+        <foreach
+          collection="rentalIds"
+          item="rentalId"
+          open="("
+          separator=","
+          close=")">
+          #{rentalId}
+        </foreach>
+      </when>
+
+      <otherwise>
+        AND 1 = 0
+      </otherwise>
+    </choose>
+
+  </select>
 </mapper>

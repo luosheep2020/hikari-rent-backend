@@ -54,5 +54,17 @@ public interface RentalMapper extends BaseMapper<Rental> {
     @Param("rentalIds") List<Long> rentalIds
   );
 
+  Long selectIndexUpperId();
 
+  List<RentalIndexRow> selectPublicIndexBatch(
+    @Param("afterId") long afterId,
+    @Param("upperId") long upperId,
+    @Param("limit") int limit
+  );
+
+  List<RentalIndexAreaRow> selectIndexAreas();
+
+  List<Rental> selectPublicRentalsByIds(
+    @Param("rentalIds") List<Long> rentalIds
+  );
 }

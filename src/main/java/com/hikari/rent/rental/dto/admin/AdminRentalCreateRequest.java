@@ -124,7 +124,8 @@ public class AdminRentalCreateRequest {
 
   @Positive
   private Long agentId;
-
+  @Positive
+  private Long companyId;
   @Positive
   private Long managementCompanyId;
 
@@ -139,6 +140,26 @@ public class AdminRentalCreateRequest {
   private List<
     @NotBlank @Size(max = 64) String
     > featureCodes = new ArrayList<>();
+
+  @NotNull
+  @Size(max = 21)
+  @Valid
+  private List<@NotNull Image> images;
+
+  public record Image(
+    @NotNull
+    @Positive
+    Long fileId,
+
+    @NotBlank
+    @Pattern(regexp = "PHOTO|FLOOR_PLAN")
+    String kind,
+
+    @NotNull
+    @Min(0)
+    Integer sortOrder
+  ) {
+  }
 
   public record Station(
     @NotNull @Positive Long stationId,

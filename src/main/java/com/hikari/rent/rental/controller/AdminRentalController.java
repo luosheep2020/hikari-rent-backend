@@ -4,12 +4,10 @@ import com.hikari.rent.common.result.ApiResponse;
 import com.hikari.rent.common.result.PageResult;
 import com.hikari.rent.rental.dto.admin.AdminRentalCreateRequest;
 import com.hikari.rent.rental.dto.admin.AdminRentalPageRequest;
+import com.hikari.rent.rental.dto.admin.AdminRentalSubmitReviewRequest;
 import com.hikari.rent.rental.dto.admin.AdminRentalUpdateRequest;
 import com.hikari.rent.rental.service.AdminRentalService;
-import com.hikari.rent.rental.vo.admin.AdminRentalCreatedVO;
-import com.hikari.rent.rental.vo.admin.AdminRentalDetailVO;
-import com.hikari.rent.rental.vo.admin.AdminRentalListVO;
-import com.hikari.rent.rental.vo.admin.AdminRentalUpdatedVO;
+import com.hikari.rent.rental.vo.admin.*;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -58,6 +56,19 @@ public class AdminRentalController {
     return ApiResponse.success(
       adminRentalService.updateDraft(
         id,
+        request
+      )
+    );
+  }
+
+  @PostMapping("/{id}/submit-review")
+  public ApiResponse<AdminRentalReviewSubmittedVO> submitReview(
+    @PathVariable("id") Long rentalId,
+    @Valid @RequestBody AdminRentalSubmitReviewRequest request
+  ) {
+    return ApiResponse.success(
+      adminRentalService.submitReview(
+        rentalId,
         request
       )
     );

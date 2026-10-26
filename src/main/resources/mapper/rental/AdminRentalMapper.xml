@@ -32,7 +32,40 @@
     <result column="updated_at" property="updatedAt"/>
 
   </resultMap>
+  <!-- Apply the server-resolved rental data scope. -->
+  <sql id="RentalManagementScope">
 
+    <choose>
+      <when test="scope != null and scope.platform">
+        AND 1 = 1
+      </when>
+
+      <when test="
+      scope != null
+      and scope.companyId != null
+      and scope.userId != null
+      and (scope.company or scope.self)
+    ">
+        AND r.company_id = #{scope.companyId}
+
+        AND EXISTS (
+        SELECT 1
+        FROM companies scope_company
+        WHERE scope_company.id = r.company_id
+        AND scope_company.status = 1
+        )
+
+        <if test="scope.self">
+          AND r.agent_id = #{scope.userId}
+        </if>
+      </when>
+
+      <otherwise>
+        AND 1 = 0
+      </otherwise>
+    </choose>
+
+  </sql>
 
   <!-- Resolve the company from the current active employee. -->
   <select
@@ -511,7 +544,42 @@
       #{featureCode}
     </foreach>
   </insert>
+  <!-- Review only pending, editable rentals with a matching version. -->
+  <update id="review">
+    UPDATE rentals r
 
+    SET
+    review_status = #{reviewStatus},
+    reviewed_by = #{reviewerId},
+    reviewed_at = UTC_TIMESTAMP(3),
+    review_remark = #{remark},
+    updated_by = #{reviewerId},
+    updated_at = UTC_TIMESTAMP(3),
+    version = r.version + 1
+
+    WHERE r.id = #{rentalId}
+    AND r.version = #{version}
+    AND r.review_status = 1
+    AND r.status IN (0, 3)
+    AND #{reviewStatus} IN (2, 3)
+
+    AND EXISTS (
+    SELECT 1
+    FROM users reviewer
+
+    INNER JOIN user_roles ur
+    ON ur.user_id = reviewer.id
+
+    INNER JOIN roles role_entry
+    ON role_entry.id = ur.role_id
+
+    WHERE reviewer.id = #{reviewerId}
+    AND reviewer.status = 1
+    AND role_entry.code = 'PLATFORM_ADMIN'
+    AND role_entry.scope = 'PLATFORM'
+    AND role_entry.status = 1
+    )
+  </update>
   <!-- Update editable rentals with an explicit version check. -->
   <update id="updateDraft">
 
@@ -587,4 +655,214 @@
     WHERE rental_id = #{rentalId}
 
   </delete>
+
+
+  <!-- Restrict access by active roles and rental ownership. -->
+  <sql id="RentalReviewManagementScope">
+
+    AND EXISTS (
+    SELECT 1
+
+    FROM users operator_user
+
+    INNER JOIN user_roles ur
+    ON ur.user_id = operator_user.id
+
+    INNER JOIN roles role_entry
+    ON role_entry.id = ur.role_id
+    AND role_entry.status = 1
+
+    LEFT JOIN companies operator_company
+    ON operator_company.id = operator_user.company_id
+
+    WHERE operator_user.id = #{userId}
+    AND operator_user.status = 1
+
+    AND (
+    (
+    role_entry.code = 'PLATFORM_ADMIN'
+    AND role_entry.scope = 'PLATFORM'
+    )
+
+    OR (
+    operator_company.status = 1
+    AND operator_user.company_id = r.company_id
+
+    AND (
+    (
+    role_entry.code = 'COMPANY_ADMIN'
+    AND role_entry.scope = 'COMPANY'
+    )
+
+    OR (
+    role_entry.code = 'AGENT'
+    AND role_entry.scope = 'SELF'
+    AND r.agent_id = operator_user.id
+    )
+    )
+    )
+    )
+    )
+
+  </sql>
+
+  <select
+    id="selectReviewTargetForUpdate"
+    resultType="com.hikari.rent.rental.repository.model.AdminRentalReviewRow">
+
+    SELECT
+    r.id,
+    r.status,
+    r.review_status AS reviewStatus,
+    r.version
+
+    FROM rentals r
+
+    WHERE r.id = #{rentalId}
+
+    <include refid="RentalReviewManagementScope"/>
+
+    FOR UPDATE
+
+  </select>
+
+
+  <update id="submitReview">
+
+    UPDATE rentals r
+
+    SET
+    review_status = 1,
+    submitted_at = UTC_TIMESTAMP(3),
+
+    reviewed_by = NULL,
+    reviewed_at = NULL,
+    review_remark = NULL,
+
+    updated_by = #{userId},
+    updated_at = UTC_TIMESTAMP(3),
+
+    version = version + 1
+
+    WHERE r.id = #{rentalId}
+    AND r.version = #{version}
+    AND r.status IN (0, 3)
+    AND r.review_status != 1
+
+    <include refid="RentalReviewManagementScope"/>
+
+  </update>
+
+  <!-- Require an active company, an active agent, and a usable photo. -->
+  <sql id="RentalPublicationRequirements">
+    AND EXISTS (
+    SELECT 1
+    FROM companies publication_company
+    WHERE publication_company.id = r.company_id
+    AND publication_company.status = 1
+    )
+
+    AND EXISTS (
+    SELECT 1
+    FROM users publication_agent
+
+    WHERE publication_agent.id = r.agent_id
+    AND publication_agent.company_id = r.company_id
+    AND publication_agent.status = 1
+
+    AND EXISTS (
+    SELECT 1
+    FROM user_roles publication_user_role
+
+    INNER JOIN roles publication_role
+    ON publication_role.id = publication_user_role.role_id
+
+    WHERE publication_user_role.user_id = publication_agent.id
+    AND publication_role.code = 'AGENT'
+    AND publication_role.scope = 'SELF'
+    AND publication_role.status = 1
+    )
+    )
+
+    AND EXISTS (
+    SELECT 1
+    FROM rental_images publication_image
+
+    INNER JOIN files publication_file
+    ON publication_file.id = publication_image.file_id
+
+    WHERE publication_image.rental_id = r.id
+    AND publication_image.kind = 'PHOTO'
+    AND publication_file.status = 1
+    AND publication_file.purpose = 'RENTAL_IMAGE'
+    AND publication_file.storage_key != ''
+    )
+  </sql>
+
+  <!-- Called after the service locks and authorizes the rental. -->
+  <select id="countPublishableRental" resultType="int">
+    SELECT COUNT(*)
+    FROM rentals r
+
+    WHERE r.id = #{rentalId}
+    AND r.status IN (0, 3)
+    AND r.review_status = 2
+
+    <include refid="RentalPublicationRequirements"/>
+  </select>
+
+  <!-- Repeat publication requirements when performing the actual update. -->
+  <update id="publish">
+    UPDATE rentals r
+
+    SET
+    status = 1,
+    published_at = UTC_TIMESTAMP(3),
+    updated_by = #{scope.userId},
+    updated_at = UTC_TIMESTAMP(3),
+    version = r.version + 1
+
+    WHERE r.id = #{rentalId}
+    AND r.version = #{version}
+    AND r.status IN (0, 3)
+    AND r.review_status = 2
+
+    <include refid="RentalManagementScope"/>
+    <include refid="RentalPublicationRequirements"/>
+  </update>
+
+  <!-- Preserve the approved review result when taking a rental offline. -->
+  <update id="unpublish">
+    UPDATE rentals r
+
+    SET
+    status = 3,
+    updated_by = #{scope.userId},
+    updated_at = UTC_TIMESTAMP(3),
+    version = r.version + 1
+
+    WHERE r.id = #{rentalId}
+    AND r.version = #{version}
+    AND r.status = 1
+
+    <include refid="RentalManagementScope"/>
+  </update>
+
+  <!-- Mark an approved, published or archived rental as rented. -->
+  <update id="markRented">
+    UPDATE rentals r
+
+    SET
+    status = 2,
+    updated_by = #{scope.userId},
+    updated_at = UTC_TIMESTAMP(3),
+    version = r.version + 1
+
+    WHERE r.id = #{rentalId}
+    AND r.version = #{version}
+    AND r.status IN (1, 3)
+    AND r.review_status = 2
+
+    <include refid="RentalManagementScope"/>
+  </update>
 </mapper>

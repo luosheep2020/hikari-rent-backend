@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.company.mapper.AdminPositionMapper">
+
+  <resultMap
+    id="PositionResultMap"
+    type="com.hikari.rent.company.entity.Position">
+
+    <id column="id" property="id"/>
+
+    <result column="company_id" property="companyId"/>
+    <result column="name" property="name"/>
+    <result column="code" property="code"/>
+    <result column="sort_order" property="sortOrder"/>
+    <result column="status" property="status"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="updated_at" property="updatedAt"/>
+
+  </resultMap>
+
+  <sql id="PositionColumns">
+    id,
+    company_id,
+    name,
+    code,
+    sort_order,
+    status,
+    created_at,
+    updated_at
+  </sql>
+
+  <select id="selectByCompanyId" resultMap="PositionResultMap">
+    SELECT
+    <include refid="PositionColumns"/>
+    FROM positions
+    WHERE company_id = #{companyId}
+    ORDER BY sort_order ASC, id ASC
+  </select>
+
+  <select id="selectById" resultMap="PositionResultMap">
+    SELECT
+    <include refid="PositionColumns"/>
+    FROM positions
+    WHERE id = #{positionId}
+  </select>
+
+  <select id="selectByIdForUpdate" resultMap="PositionResultMap">
+    SELECT
+    <include refid="PositionColumns"/>
+    FROM positions
+
+    WHERE id = #{positionId}
+    AND company_id = #{companyId}
+
+    FOR UPDATE
+  </select>
+
+  <insert
+    id="insert"
+    useGeneratedKeys="true"
+    keyProperty="position.id"
+    keyColumn="id">
+
+    INSERT INTO positions (
+    company_id,
+    name,
+    code,
+    sort_order,
+    status,
+    created_at,
+    updated_at
+    )
+    VALUES (
+    #{position.companyId},
+    #{position.name},
+    #{position.code},
+    #{position.sortOrder},
+    1,
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3)
+    )
+  </insert>
+
+  <!-- Company ownership and status are not editable here. -->
+  <update id="update">
+    UPDATE positions
+
+    SET
+    name = #{position.name},
+    code = #{position.code},
+    sort_order = #{position.sortOrder},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{position.id}
+    AND company_id = #{position.companyId}
+  </update>
+
+  <update id="updateStatus">
+    UPDATE positions
+
+    SET
+    status = #{status},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{positionId}
+    AND company_id = #{companyId}
+  </update>
+
+  <select id="countActiveUsers" resultType="int">
+    SELECT COUNT(*)
+    FROM users
+
+    WHERE company_id = #{companyId}
+    AND position_id = #{positionId}
+    AND status = 1
+  </select>
+
+</mapper>

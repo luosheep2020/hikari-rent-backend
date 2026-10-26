@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.rental.mapper.RentalIndexSyncTaskMapper">
+
+  <insert id="enqueue">
+    INSERT INTO rental_index_sync_tasks (
+    rental_id,
+    retry_count,
+    next_attempt_at,
+    last_error
+    )
+    VALUES (
+    #{rentalId},
+    0,
+    UTC_TIMESTAMP(3),
+    NULL
+    )
+
+    ON DUPLICATE KEY UPDATE
+    retry_count = 0,
+    next_attempt_at = UTC_TIMESTAMP(3),
+    last_error = NULL,
+    updated_at = UTC_TIMESTAMP(3)
+  </insert>
+
+  <select
+    id="selectNextForUpdate"
+    resultType="com.hikari.rent.rental.repository.model.RentalIndexSyncTaskRow">
+
+    SELECT
+    rental_id AS rentalId,
+    retry_count AS retryCount
+
+    FROM rental_index_sync_tasks
+
+    WHERE next_attempt_at &lt;= UTC_TIMESTAMP(3)
+
+    ORDER BY next_attempt_at ASC, rental_id ASC
+
+    LIMIT 1
+
+    FOR UPDATE SKIP LOCKED
+
+  </select>
+
+  <delete id="deleteTask">
+    DELETE FROM rental_index_sync_tasks
+    WHERE rental_id = #{rentalId}
+  </delete>
+
+  <update id="reschedule">
+    UPDATE rental_index_sync_tasks
+
+    SET
+    retry_count = #{retryCount},
+    next_attempt_at = #{nextAttemptAt},
+    last_error = #{lastError},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE rental_id = #{rentalId}
+  </update>
+
+</mapper>

@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.company.mapper.AdminDepartmentMapper">
+
+  <resultMap
+    id="DepartmentResultMap"
+    type="com.hikari.rent.company.entity.Department">
+
+    <id column="id" property="id"/>
+
+    <result column="company_id" property="companyId"/>
+    <result column="parent_id" property="parentId"/>
+    <result column="name" property="name"/>
+    <result column="code" property="code"/>
+    <result column="sort_order" property="sortOrder"/>
+    <result column="status" property="status"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="updated_at" property="updatedAt"/>
+
+  </resultMap>
+
+  <sql id="DepartmentColumns">
+    id,
+    company_id,
+    parent_id,
+    name,
+    code,
+    sort_order,
+    status,
+    created_at,
+    updated_at
+  </sql>
+
+  <select id="selectById" resultMap="DepartmentResultMap">
+    SELECT
+    <include refid="DepartmentColumns"/>
+    FROM departments
+    WHERE id = #{departmentId}
+  </select>
+
+  <select id="selectByCompanyId" resultMap="DepartmentResultMap">
+    SELECT
+    <include refid="DepartmentColumns"/>
+    FROM departments
+    WHERE company_id = #{companyId}
+    ORDER BY sort_order ASC, id ASC
+  </select>
+
+  <!-- Read current department rows after locking the company. -->
+  <select
+    id="selectByCompanyIdForUpdate"
+    resultMap="DepartmentResultMap">
+
+    SELECT
+    <include refid="DepartmentColumns"/>
+    FROM departments
+    WHERE company_id = #{companyId}
+    ORDER BY sort_order ASC, id ASC
+    FOR UPDATE
+  </select>
+
+  <insert
+    id="insert"
+    useGeneratedKeys="true"
+    keyProperty="department.id"
+    keyColumn="id">
+
+    INSERT INTO departments (
+    company_id,
+    parent_id,
+    name,
+    code,
+    sort_order,
+    status,
+    created_at,
+    updated_at
+    )
+    VALUES (
+    #{department.companyId},
+    #{department.parentId},
+    #{department.name},
+    #{department.code},
+    #{department.sortOrder},
+    1,
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3)
+    )
+  </insert>
+
+  <!-- Company ownership cannot be changed. -->
+  <update id="update">
+    UPDATE departments
+
+    SET
+    parent_id = #{department.parentId},
+    name = #{department.name},
+    code = #{department.code},
+    sort_order = #{department.sortOrder},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{department.id}
+    AND company_id = #{department.companyId}
+  </update>
+
+  <update id="updateStatus">
+    UPDATE departments
+
+    SET
+    status = #{status},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{departmentId}
+    AND company_id = #{companyId}
+  </update>
+
+  <select id="countActiveUsers" resultType="int">
+    SELECT COUNT(*)
+    FROM users
+    WHERE company_id = #{companyId}
+    AND department_id = #{departmentId}
+    AND status = 1
+  </select>
+
+</mapper>

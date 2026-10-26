@@ -1,9 +1,13 @@
 package com.hikari.rent.rental.search.repository.impl;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.SortMode;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.ChildScoreMode;
 import co.elastic.clients.elasticsearch._types.query_dsl.Operator;
+import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
@@ -16,6 +20,8 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Repository;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -50,11 +56,16 @@ public class RentalSearchRepositoryImpl
       );
     }
 
-    BoolQuery.Builder bool = new BoolQuery.Builder();
+    BoolQuery.Builder bool =
+      new BoolQuery.Builder();
 
     addKeywordQuery(bool, criteria);
     addAreaFilter(bool, criteria);
     addRentFilter(bool, criteria);
+    addPropertyFilter(bool, criteria);
+    addBuildingAgeFilter(bool, criteria);
+    addStationFilter(bool, criteria);
+    addFeatureFilter(bool, criteria);
 
     SearchRequest.Builder search =
       new SearchRequest.Builder()
@@ -91,10 +102,7 @@ public class RentalSearchRepositoryImpl
         response.hits()
           .hits()
           .stream()
-          .map(hit -> {
-            assert hit.id() != null;
-            return Long.valueOf(hit.id());
-          })
+          .map(hit -> Long.valueOf(hit.id()))
           .toList();
 
       return new PageResult<>(
@@ -111,7 +119,6 @@ public class RentalSearchRepositoryImpl
       );
     }
   }
-
   private void addKeywordQuery(
     BoolQuery.Builder bool,
     RentalSearchCriteria criteria
@@ -179,6 +186,126 @@ public class RentalSearchRepositoryImpl
     ));
   }
 
+  private void addPropertyFilter(
+    BoolQuery.Builder bool,
+    RentalSearchCriteria criteria
+  ) {
+    if (criteria.propertyType() != null) {
+      bool.filter(query -> query.term(term ->
+        term
+          .field("propertyType")
+          .value(criteria.propertyType().longValue())
+      ));
+    }
+
+    if (!criteria.floorPlans().isEmpty()) {
+      List<FieldValue> values =
+        criteria.floorPlans()
+          .stream()
+          .map(FieldValue::of)
+          .toList();
+
+      bool.filter(query -> query.terms(terms ->
+        terms
+          .field("floorPlan")
+          .terms(value -> value.value(values))
+      ));
+    }
+  }
+
+  private void addBuildingAgeFilter(
+    BoolQuery.Builder bool,
+    RentalSearchCriteria criteria
+  ) {
+    if (criteria.maxBuildingAge() == null) {
+      return;
+    }
+
+    LocalDate today =
+      LocalDate.now(ZoneId.of("Asia/Tokyo"));
+
+    // Match the existing SQL's completed-year age calculation.
+    LocalDate exclusiveLowerBound =
+      today.minusYears(
+        criteria.maxBuildingAge().longValue() + 1
+      );
+
+    bool.filter(query -> query.range(range ->
+      range.date(date ->
+        date
+          .field("builtDate")
+          .gt(exclusiveLowerBound.toString())
+          .lte(today.toString())
+      )
+    ));
+  }
+
+  private void addStationFilter(
+    BoolQuery.Builder bool,
+    RentalSearchCriteria criteria
+  ) {
+    if (
+      criteria.stationId() == null
+        && criteria.maxWalkingMinutes() == null
+    ) {
+      return;
+    }
+
+    Query stationQuery =
+      buildStationQuery(criteria);
+
+    bool.filter(query -> query.nested(nested ->
+      nested
+        .path("stations")
+        .scoreMode(ChildScoreMode.None)
+        .query(stationQuery)
+    ));
+  }
+
+  private Query buildStationQuery(
+    RentalSearchCriteria criteria
+  ) {
+    BoolQuery.Builder stationBool =
+      new BoolQuery.Builder();
+
+    if (criteria.stationId() != null) {
+      stationBool.filter(query -> query.term(term ->
+        term
+          .field("stations.id")
+          .value(criteria.stationId().toString())
+      ));
+    }
+
+    if (criteria.maxWalkingMinutes() != null) {
+      stationBool.filter(query -> query.range(range ->
+        range.number(number ->
+          number
+            .field("stations.walkingMinutes")
+            .lte(
+              criteria.maxWalkingMinutes()
+                .doubleValue()
+            )
+        )
+      ));
+    }
+
+    return Query.of(query ->
+      query.bool(stationBool.build())
+    );
+  }
+
+  private void addFeatureFilter(
+    BoolQuery.Builder bool,
+    RentalSearchCriteria criteria
+  ) {
+    for (String code : criteria.featureCodes()) {
+      bool.filter(query -> query.term(term ->
+        term
+          .field("featureCodes")
+          .value(code)
+      ));
+    }
+  }
   private void addSort(
     SearchRequest.Builder search,
     RentalSearchCriteria criteria
@@ -205,6 +332,22 @@ public class RentalSearchRepositoryImpl
             .order(SortOrder.Desc)
         ));
 
+      case "walkingAsc" ->
+        search.sort(sort -> sort.field(field ->
+          field
+            .field("stations.walkingMinutes")
+            .order(SortOrder.Asc)
+            .mode(SortMode.Min)
+            .missing("_last")
+            .nested(nested ->
+              nested
+                .path("stations")
+                .filter(
+                  buildStationQuery(criteria)
+                )
+            )
+        ));
+
       default -> {
         if (criteria.keyword() != null) {
           search.sort(sort -> sort.score(score ->
@@ -216,11 +359,11 @@ public class RentalSearchRepositoryImpl
           field
             .field("publishedAt")
             .order(SortOrder.Desc)
+            .missing("_last")
         ));
       }
     }
 
-    // Use a unique field to make equal-value ordering deterministic.
     search.sort(sort -> sort.field(field ->
       field
         .field("rentalId")
@@ -341,4 +484,28 @@ public class RentalSearchRepositoryImpl
       );
     }
   }
+  @Override
+  public void deleteById(Long rentalId) {
+    if (rentalId == null || rentalId <= 0) {
+      throw new IllegalArgumentException(
+        "rentalId must be greater than zero"
+      );
+    }
+
+    try {
+      rentalElasticsearchClient.delete(request ->
+        request
+          .index(INDEX)
+          .id(rentalId.toString())
+      );
+
+    } catch (IOException ex) {
+      throw new IllegalStateException(
+        "Failed to delete rental document: "
+          + rentalId,
+        ex
+      );
+    }
+  }
+
 }

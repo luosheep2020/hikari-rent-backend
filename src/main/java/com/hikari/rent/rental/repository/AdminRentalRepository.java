@@ -3,7 +3,9 @@ package com.hikari.rent.rental.repository;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.hikari.rent.rental.dto.admin.AdminRentalCreateRequest;
 import com.hikari.rent.rental.dto.admin.AdminRentalPageRequest;
+import com.hikari.rent.rental.model.RentalAccessScope;
 import com.hikari.rent.rental.repository.model.AdminRentalInsertRow;
+import com.hikari.rent.rental.repository.model.AdminRentalReviewRow;
 import com.hikari.rent.rental.repository.model.AdminRentalUpdateRow;
 import com.hikari.rent.rental.vo.admin.AdminRentalDetailVO;
 import com.hikari.rent.rental.vo.admin.AdminRentalListVO;
@@ -16,16 +18,13 @@ public interface AdminRentalRepository {
 
   IPage<AdminRentalListVO> searchPage(
     AdminRentalPageRequest request,
-    Long userId,
-    Long companyId
+    RentalAccessScope scope
   );
 
   AdminRentalDetailVO findDetail(
     Long rentalId,
-    Long userId,
-    Long companyId
+    RentalAccessScope scope
   );
-
 
   boolean municipalityExists(String areaCode);
 
@@ -42,19 +41,74 @@ public interface AdminRentalRepository {
 
   void insertDraft(AdminRentalInsertRow rental);
 
+  boolean updateDraft(
+    AdminRentalUpdateRow rental,
+    RentalAccessScope scope
+  );
+
   int insertStationRelations(
     Long rentalId,
     List<AdminRentalCreateRequest.Station> stations
   );
+
+  void deleteStationRelations(Long rentalId);
 
   int insertFeatureRelations(
     Long rentalId,
     List<String> featureCodes
   );
 
-  boolean updateDraft(AdminRentalUpdateRow rental);
-
-  void deleteStationRelations(Long rentalId);
-
   void deleteFeatureRelations(Long rentalId);
+
+  List<Long> lockUsableImageFileIds(
+    Long rentalId,
+    Long userId,
+    List<Long> fileIds
+  );
+
+  int insertImageRelations(
+    Long rentalId,
+    List<AdminRentalCreateRequest.Image> images
+  );
+
+  void deleteImageRelations(Long rentalId);
+
+  AdminRentalReviewRow findReviewTargetForUpdate(
+    Long rentalId,
+    RentalAccessScope scope
+  );
+
+  boolean submitReview(
+    Long rentalId,
+    RentalAccessScope scope,
+    long version
+  );
+
+  boolean review(
+    Long rentalId,
+    Long reviewerId,
+    long version,
+    int reviewStatus,
+    String remark
+  );
+
+  boolean meetsPublicationRequirements(Long rentalId);
+
+  boolean publish(
+    Long rentalId,
+    RentalAccessScope scope,
+    long version
+  );
+
+  boolean unpublish(
+    Long rentalId,
+    RentalAccessScope scope,
+    long version
+  );
+
+  boolean markRented(
+    Long rentalId,
+    RentalAccessScope scope,
+    long version
+  );
 }

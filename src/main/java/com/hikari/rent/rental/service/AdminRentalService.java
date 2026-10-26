@@ -3,11 +3,9 @@ package com.hikari.rent.rental.service;
 import com.hikari.rent.common.result.PageResult;
 import com.hikari.rent.rental.dto.admin.AdminRentalCreateRequest;
 import com.hikari.rent.rental.dto.admin.AdminRentalPageRequest;
+import com.hikari.rent.rental.dto.admin.AdminRentalSubmitReviewRequest;
 import com.hikari.rent.rental.dto.admin.AdminRentalUpdateRequest;
-import com.hikari.rent.rental.vo.admin.AdminRentalCreatedVO;
-import com.hikari.rent.rental.vo.admin.AdminRentalDetailVO;
-import com.hikari.rent.rental.vo.admin.AdminRentalListVO;
-import com.hikari.rent.rental.vo.admin.AdminRentalUpdatedVO;
+import com.hikari.rent.rental.vo.admin.*;
 
 public interface AdminRentalService {
 
@@ -25,4 +23,11 @@ public interface AdminRentalService {
     Long rentalId,
     AdminRentalUpdateRequest request
   );
+
+  AdminRentalReviewSubmittedVO submitReview(
+    Long rentalId,
+    AdminRentalSubmitReviewRequest request
+  );
+
+
 }

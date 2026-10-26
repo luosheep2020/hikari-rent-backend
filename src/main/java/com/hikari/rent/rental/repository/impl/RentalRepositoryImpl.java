@@ -119,4 +119,45 @@ public class RentalRepositoryImpl
 
     return baseMapper.selectPublicByIds(rentalIds);
   }
+
+  @Override
+  public long findIndexUpperId() {
+    return getBaseMapper().selectIndexUpperId();
+  }
+
+  @Override
+  public List<RentalIndexRow> findPublicIndexBatch(
+    long afterId,
+    long upperId,
+    int limit
+  ) {
+    if (limit < 1 || limit > 500) {
+      throw new IllegalArgumentException(
+        "Batch size must be between 1 and 500"
+      );
+    }
+
+    return getBaseMapper().selectPublicIndexBatch(
+      afterId,
+      upperId,
+      limit
+    );
+  }
+
+  @Override
+  public List<RentalIndexAreaRow> findIndexAreas() {
+    return getBaseMapper().selectIndexAreas();
+  }
+
+  @Override
+  public List<Rental> findPublicRentalsByIds(
+    List<Long> rentalIds
+  ) {
+    if (rentalIds == null || rentalIds.isEmpty()) {
+      return List.of();
+    }
+
+    return getBaseMapper()
+      .selectPublicRentalsByIds(rentalIds);
+  }
 }

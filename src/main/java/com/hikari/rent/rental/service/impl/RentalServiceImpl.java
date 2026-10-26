@@ -9,6 +9,8 @@ import com.hikari.rent.rental.entity.Rental;
 import com.hikari.rent.rental.exception.RentalNotFoundException;
 import com.hikari.rent.rental.repository.RentalRepository;
 import com.hikari.rent.rental.repository.model.*;
+import com.hikari.rent.rental.search.model.RentalSearchCriteria;
+import com.hikari.rent.rental.search.repository.RentalSearchRepository;
 import com.hikari.rent.rental.service.RentalService;
 import com.hikari.rent.rental.vo.*;
 import jakarta.annotation.Resource;
@@ -22,6 +24,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,20 +36,57 @@ public class RentalServiceImpl implements RentalService {
   @Resource
   private FileUrlService fileUrlService;
 
+  @Resource
+  private RentalSearchRepository rentalSearchRepository;
+
   private static final int MAP_RESULT_LIMIT = 200;
 
   @Override
-  @Transactional(readOnly = true)
   public PageResult<RentalListVO> searchPage(
     RentalPageRequest request
   ) {
-    IPage<Rental> page = rentalRepository.searchPage(request);
+    RentalSearchCriteria criteria =
+      new RentalSearchCriteria(
+        request.getPage(),
+        request.getPageSize(),
+        request.getKeyword(),
+        request.getAreaCode(),
+        request.getMinRent(),
+        request.getMaxRent(),
+        request.getPropertyType(),
+        request.getFloorPlans(),
+        request.getMaxBuildingAge(),
+        request.getStationId(),
+        request.getMaxWalkingMinutes(),
+        request.getFeatureCodes(),
+        request.getSort()
+      );
+
+    PageResult<Long> searchResult =
+      rentalSearchRepository.searchPage(criteria);
+
+    List<Rental> rentals =
+      loadOrderedPublicRentals(
+        searchResult.records()
+      );
+
+    if (rentals.isEmpty()) {
+      return new PageResult<>(
+        searchResult.pageNum(),
+        searchResult.pageSize(),
+        searchResult.total(),
+        List.of()
+      );
+    }
+
+    List<RentalListVO> records =
+      assembleListVOs(rentals);
 
     return new PageResult<>(
-      page.getCurrent(),
-      page.getSize(),
-      page.getTotal(),
-      assembleListVOs(page.getRecords())
+      searchResult.pageNum(),
+      searchResult.pageSize(),
+      searchResult.total(),
+      records
     );
   }
 
@@ -474,5 +514,28 @@ public class RentalServiceImpl implements RentalService {
       .toList();
 
     return assembleListVOs(orderedRentals);
+  }
+
+  private List<Rental> loadOrderedPublicRentals(
+    List<Long> rentalIds
+  ) {
+    if (rentalIds.isEmpty()) {
+      return List.of();
+    }
+
+    Map<Long, Rental> rentalsById =
+      rentalRepository
+        .findPublicRentalsByIds(rentalIds)
+        .stream()
+        .collect(Collectors.toMap(
+          Rental::getId,
+          Function.identity()
+        ));
+
+    // Preserve Elasticsearch ordering and exclude unavailable rentals.
+    return rentalIds.stream()
+      .map(rentalsById::get)
+      .filter(Objects::nonNull)
+      .toList();
   }
 }

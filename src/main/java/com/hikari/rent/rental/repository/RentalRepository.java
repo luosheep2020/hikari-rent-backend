@@ -43,4 +43,18 @@ public interface RentalRepository extends IRepository<Rental> {
   );
 
   List<Rental> findPublicByIds(List<Long> rentalIds);
+
+  long findIndexUpperId();
+
+  List<RentalIndexRow> findPublicIndexBatch(
+    long afterId,
+    long upperId,
+    int limit
+  );
+
+  List<RentalIndexAreaRow> findIndexAreas();
+
+  List<Rental> findPublicRentalsByIds(
+    List<Long> rentalIds
+  );
 }
