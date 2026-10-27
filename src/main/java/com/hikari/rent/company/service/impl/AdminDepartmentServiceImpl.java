@@ -14,6 +14,7 @@ import com.hikari.rent.company.vo.AdminDepartmentCreatedVO;
 import com.hikari.rent.company.vo.AdminDepartmentTreeVO;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,10 @@ import java.util.Objects;
 import java.util.Set;
 
 @Service
+@PreAuthorize(
+  "hasAnyRole('PLATFORM_ADMIN', 'COMPANY_ADMIN') "
+    + "and hasAuthority('department:manage')"
+)
 public class AdminDepartmentServiceImpl
   implements AdminDepartmentService {
 

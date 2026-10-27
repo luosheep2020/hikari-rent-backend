@@ -12,6 +12,7 @@ import com.hikari.rent.rental.service.AdminRentalReviewService;
 import com.hikari.rent.rental.service.RentalAccessService;
 import com.hikari.rent.rental.vo.admin.AdminRentalReviewedVO;
 import jakarta.annotation.Resource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ public class AdminRentalReviewServiceImpl
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('rental:review')")
   public AdminRentalReviewedVO review(
     Long rentalId,
     AdminRentalReviewRequest request

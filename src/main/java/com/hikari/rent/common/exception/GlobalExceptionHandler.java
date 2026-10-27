@@ -10,6 +10,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -143,6 +144,17 @@ public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(
       .body(ApiResponse.failure(
         404,
         exception.getMessage()
+      ));
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<ApiResponse<Void>> handleAccessDenied(
+    AccessDeniedException ex
+  ) {
+    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+      .body(ApiResponse.failure(
+        ErrorCode.ACCESS_DENIED.getCode(),
+        ErrorCode.ACCESS_DENIED.getMessage()
       ));
   }
 }

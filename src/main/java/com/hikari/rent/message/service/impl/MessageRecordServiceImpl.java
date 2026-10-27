@@ -24,6 +24,7 @@ import com.hikari.rent.message.vo.MessageRecordVO;
 
 import jakarta.annotation.Resource;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -224,6 +225,7 @@ public class MessageRecordServiceImpl
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('message:send')")
   public MessageRecordVO sendMessage(
     Long sessionId,
     SendMessageRequest request

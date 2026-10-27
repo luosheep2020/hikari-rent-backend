@@ -24,6 +24,7 @@ import com.hikari.rent.rental.vo.admin.AdminRentalListVO;
 import com.hikari.rent.rental.vo.admin.AdminRentalReviewSubmittedVO;
 import com.hikari.rent.rental.vo.admin.AdminRentalUpdatedVO;
 import jakarta.annotation.Resource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -130,6 +131,7 @@ public class AdminRentalServiceImpl implements AdminRentalService {
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('rental:create')")
   public AdminRentalCreatedVO createDraft(
     AdminRentalCreateRequest request
   ) {
@@ -181,6 +183,7 @@ public class AdminRentalServiceImpl implements AdminRentalService {
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('rental:update')")
   public AdminRentalUpdatedVO updateDraft(
     Long rentalId,
     AdminRentalUpdateRequest request
@@ -264,6 +267,7 @@ public class AdminRentalServiceImpl implements AdminRentalService {
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('rental:submit')")
   public AdminRentalReviewSubmittedVO submitReview(
     Long rentalId,
     AdminRentalSubmitReviewRequest request

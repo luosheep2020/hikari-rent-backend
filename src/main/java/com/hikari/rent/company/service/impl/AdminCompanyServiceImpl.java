@@ -79,6 +79,10 @@ public class AdminCompanyServiceImpl implements AdminCompanyService {
 
   @Override
   @Transactional
+  @PreAuthorize(
+    "hasRole('PLATFORM_ADMIN') "
+      + "and hasAuthority('company:update')"
+  )
   public void update(
     Long companyId,
     AdminCompanySaveRequest request

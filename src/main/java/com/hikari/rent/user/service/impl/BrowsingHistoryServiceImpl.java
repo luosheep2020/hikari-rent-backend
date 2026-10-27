@@ -23,6 +23,7 @@ import jakarta.annotation.Resource;
 
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -57,6 +58,7 @@ public class BrowsingHistoryServiceImpl
   private RentalService rentalService;
 
   @Override
+  @PreAuthorize("hasAuthority('history:manage')")
   public List<RentalListVO> getHistory() {
 
     Long userId = currentUserService.requireUserId();
@@ -79,6 +81,7 @@ public class BrowsingHistoryServiceImpl
   }
 
   @Override
+  @PreAuthorize("hasAuthority('history:manage')")
   public void recordView(Long rentalId) {
 
     validateRentalId(rentalId);
@@ -110,6 +113,7 @@ public class BrowsingHistoryServiceImpl
   }
 
   @Override
+  @PreAuthorize("hasAuthority('history:manage')")
   public void remove(Long rentalId) {
 
     validateRentalId(rentalId);
@@ -131,6 +135,7 @@ public class BrowsingHistoryServiceImpl
   }
 
   @Override
+  @PreAuthorize("hasAuthority('history:manage')")
   public void clear() {
 
     Long userId = currentUserService.requireUserId();

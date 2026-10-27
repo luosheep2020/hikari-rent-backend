@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.user.mapper.AdminUserMapper">
+
+  <resultMap
+    id="UserResultMap"
+    type="com.hikari.rent.user.repository.model.AdminUserRow">
+
+    <id column="id" property="id"/>
+
+    <result column="email" property="email"/>
+    <result column="nickname" property="nickname"/>
+    <result column="phone" property="phone"/>
+
+    <result column="company_id" property="companyId"/>
+    <result column="company_name" property="companyName"/>
+
+    <result column="department_id" property="departmentId"/>
+    <result column="department_name" property="departmentName"/>
+
+    <result column="position_id" property="positionId"/>
+    <result column="position_name" property="positionName"/>
+
+    <result column="status" property="status"/>
+    <result column="last_login_at" property="lastLoginAt"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="updated_at" property="updatedAt"/>
+
+  </resultMap>
+
+  <resultMap
+    id="UserRoleResultMap"
+    type="com.hikari.rent.user.repository.model.AdminUserRoleRow">
+
+    <result column="user_id" property="userId"/>
+    <result column="code" property="code"/>
+
+  </resultMap>
+
+  <sql id="UserDetailQuery">
+    SELECT
+    u.id,
+    u.email,
+    u.nickname,
+    u.phone,
+    u.company_id,
+    c.name AS company_name,
+    u.department_id,
+    d.name AS department_name,
+    u.position_id,
+    p.name AS position_name,
+    u.status,
+    u.last_login_at,
+    u.created_at,
+    u.updated_at
+
+    FROM users u
+
+    LEFT JOIN companies c
+    ON c.id = u.company_id
+
+    LEFT JOIN departments d
+    ON d.id = u.department_id
+    AND d.company_id = u.company_id
+
+    LEFT JOIN positions p
+    ON p.id = u.position_id
+    AND p.company_id = u.company_id
+  </sql>
+
+  <select id="searchPage" resultMap="UserResultMap">
+    <include refid="UserDetailQuery"/>
+
+    WHERE 1 = 1
+
+    <if test="query.keyword != null and query.keyword.trim() != ''">
+      AND (
+      LOCATE(TRIM(#{query.keyword}), u.nickname) > 0
+      OR LOCATE(TRIM(#{query.keyword}), u.email) > 0
+      )
+    </if>
+
+    <if test="query.companyId != null">
+      AND u.company_id = #{query.companyId}
+    </if>
+
+    <if test="query.status != null">
+      AND u.status = #{query.status}
+    </if>
+
+    <if test="query.roleCode != null">
+      AND EXISTS (
+      SELECT 1
+      FROM user_roles ur
+
+      INNER JOIN roles r
+      ON r.id = ur.role_id
+
+      WHERE ur.user_id = u.id
+      AND r.code = #{query.roleCode}
+      )
+    </if>
+
+    ORDER BY u.created_at DESC, u.id DESC
+  </select>
+
+  <select id="selectById" resultMap="UserResultMap">
+    <include refid="UserDetailQuery"/>
+
+    WHERE u.id = #{userId}
+  </select>
+
+  <!-- Lock only the account row for status changes. -->
+  <select id="selectByIdForUpdate" resultMap="UserResultMap">
+    SELECT
+    id,
+    email,
+    nickname,
+    phone,
+    company_id,
+    department_id,
+    position_id,
+    status,
+    last_login_at,
+    created_at,
+    updated_at
+
+    FROM users
+
+    WHERE id = #{userId}
+
+    FOR UPDATE
+  </select>
+
+  <select
+    id="selectRolesByUserIds"
+    resultMap="UserRoleResultMap">
+
+    SELECT
+    ur.user_id,
+    r.code
+
+    FROM user_roles ur
+
+    INNER JOIN roles r
+    ON r.id = ur.role_id
+
+    WHERE 1 = 1
+
+    <choose>
+      <when test="userIds != null and userIds.size() > 0">
+        AND ur.user_id IN
+        <foreach
+          collection="userIds"
+          item="userId"
+          open="("
+          separator=","
+          close=")">
+          #{userId}
+        </foreach>
+      </when>
+
+      <otherwise>
+        AND 1 = 0
+      </otherwise>
+    </choose>
+
+    ORDER BY ur.user_id, r.id
+  </select>
+
+  <!-- Invalidate existing login snapshots when disabling an account. -->
+  <update id="updateStatus">
+    UPDATE users
+
+    SET
+    status = #{status},
+
+    password_changed_at = CASE
+    WHEN #{status} = 0 THEN
+    GREATEST(
+    UTC_TIMESTAMP(3),
+    DATE_ADD(
+    COALESCE(
+    password_changed_at,
+    '1970-01-01 00:00:00.000'
+    ),
+    INTERVAL 1000 MICROSECOND
+    )
+    )
+    ELSE password_changed_at
+    END,
+
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{userId}
+  </update>
+
+  <insert id="enqueueRentalSyncTasks">
+    INSERT INTO rental_index_sync_tasks (
+    rental_id,
+    retry_count,
+    next_attempt_at,
+    last_error
+    )
+    SELECT
+    r.id,
+    0,
+    UTC_TIMESTAMP(3),
+    NULL
+
+    FROM rentals r
+
+    WHERE r.agent_id = #{userId}
+
+    ORDER BY r.id
+
+    ON DUPLICATE KEY UPDATE
+    retry_count = 0,
+    next_attempt_at = UTC_TIMESTAMP(3),
+    last_error = NULL,
+    updated_at = UTC_TIMESTAMP(3)
+  </insert>
+
+</mapper>

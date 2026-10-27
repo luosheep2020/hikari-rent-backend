@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.auth.mapper.AuthPermissionMapper">
+
+  <!-- Combine permissions granted by all active roles. -->
+  <select
+    id="selectPermissionCodes"
+    resultType="java.lang.String">
+
+    SELECT DISTINCT p.code
+
+    FROM permissions p
+
+    INNER JOIN role_permissions rp
+    ON rp.permission_id = p.id
+
+    INNER JOIN roles r
+    ON r.id = rp.role_id
+    AND r.status = 1
+
+    INNER JOIN user_roles ur
+    ON ur.role_id = r.id
+
+    INNER JOIN users u
+    ON u.id = ur.user_id
+    AND u.status = 1
+
+    WHERE u.id = #{userId}
+
+    ORDER BY p.code
+  </select>
+
+  <!-- Platform administrators receive every defined permission. -->
+  <select
+    id="selectAllPermissionCodes"
+    resultType="java.lang.String">
+
+    SELECT code
+    FROM permissions
+    ORDER BY code
+  </select>
+
+</mapper>

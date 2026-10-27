@@ -10,6 +10,7 @@ import com.hikari.rent.user.repository.model.UserProfileRow;
 import com.hikari.rent.user.service.UserProfileService;
 import com.hikari.rent.user.vo.UserProfileVO;
 import jakarta.annotation.Resource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +37,7 @@ public class UserProfileServiceImpl
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('profile:update')")
   public UserProfileVO updateProfile(
     UpdateProfileRequest request
   ) {

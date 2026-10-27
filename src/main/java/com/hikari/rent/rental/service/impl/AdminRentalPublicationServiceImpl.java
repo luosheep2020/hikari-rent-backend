@@ -13,6 +13,7 @@ import com.hikari.rent.rental.service.AdminRentalPublicationService;
 import com.hikari.rent.rental.service.RentalAccessService;
 import com.hikari.rent.rental.vo.admin.AdminRentalPublicationVO;
 import jakarta.annotation.Resource;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ public class AdminRentalPublicationServiceImpl
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('rental:publish')")
   public AdminRentalPublicationVO publish(
     Long rentalId,
     AdminRentalPublicationRequest request
@@ -46,6 +48,7 @@ public class AdminRentalPublicationServiceImpl
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('rental:publish')")
   public AdminRentalPublicationVO unpublish(
     Long rentalId,
     AdminRentalPublicationRequest request
@@ -59,6 +62,7 @@ public class AdminRentalPublicationServiceImpl
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('rental:publish')")
   public AdminRentalPublicationVO markRented(
     Long rentalId,
     AdminRentalPublicationRequest request

@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.auth.mapper.AdminRoleMapper">
+
+  <resultMap
+    id="RoleResultMap"
+    type="com.hikari.rent.auth.repository.model.AdminRoleRow">
+
+    <id column="id" property="id"/>
+
+    <result column="code" property="code"/>
+    <result column="name" property="name"/>
+    <result column="description" property="description"/>
+    <result column="scope" property="scope"/>
+    <result column="status" property="status"/>
+
+  </resultMap>
+
+  <resultMap
+    id="UserResultMap"
+    type="com.hikari.rent.auth.repository.model.AdminRoleUserRow">
+
+    <id column="id" property="id"/>
+
+    <result column="company_id" property="companyId"/>
+    <result column="status" property="status"/>
+
+  </resultMap>
+
+  <select id="selectAllRoles" resultMap="RoleResultMap">
+    SELECT
+    id,
+    code,
+    name,
+    description,
+    scope,
+    status
+
+    FROM roles
+
+    ORDER BY id
+  </select>
+
+  <select id="selectAllRolesForShare" resultMap="RoleResultMap">
+    SELECT
+    id,
+    code,
+    name,
+    description,
+    scope,
+    status
+
+    FROM roles
+
+    ORDER BY id
+
+    FOR SHARE
+  </select>
+
+  <select id="selectUser" resultMap="UserResultMap">
+    SELECT id, company_id, status
+    FROM users
+    WHERE id = #{userId}
+  </select>
+
+  <select id="selectUserForUpdate" resultMap="UserResultMap">
+    SELECT id, company_id, status
+    FROM users
+    WHERE id = #{userId}
+    FOR UPDATE
+  </select>
+
+  <select id="selectUserRoles" resultMap="RoleResultMap">
+    SELECT
+    r.id,
+    r.code,
+    r.name,
+    r.description,
+    r.scope,
+    r.status
+
+    FROM roles r
+
+    INNER JOIN user_roles ur
+    ON ur.role_id = r.id
+
+    WHERE ur.user_id = #{userId}
+
+    ORDER BY r.id
+  </select>
+
+  <!-- Serialize role assignments to protect the last platform administrator. -->
+  <select
+    id="selectPlatformRoleForUpdate"
+    resultMap="RoleResultMap">
+
+    SELECT
+    id,
+    code,
+    name,
+    description,
+    scope,
+    status
+
+    FROM roles
+
+    WHERE code = 'PLATFORM_ADMIN'
+    AND scope = 'PLATFORM'
+    AND status = 1
+
+    FOR UPDATE
+  </select>
+
+  <!-- Use a locking read to obtain current administrator membership. -->
+  <select
+    id="selectActivePlatformAdminIds"
+    resultType="java.lang.Long">
+
+    SELECT u.id
+
+    FROM users u
+
+    INNER JOIN user_roles ur
+    ON ur.user_id = u.id
+
+    WHERE ur.role_id = #{roleId}
+    AND u.status = 1
+
+    ORDER BY u.id
+
+    FOR SHARE
+  </select>
+
+  <delete id="deleteUserRoles">
+    DELETE FROM user_roles
+    WHERE user_id = #{userId}
+  </delete>
+
+  <insert id="insertUserRoles">
+    INSERT INTO user_roles (
+    user_id,
+    role_id,
+    created_at
+    )
+    VALUES
+    <foreach
+      collection="roleIds"
+      item="roleId"
+      separator=",">
+      (
+      #{userId},
+      #{roleId},
+      UTC_TIMESTAMP(3)
+      )
+    </foreach>
+  </insert>
+
+  <!-- Agent-role changes may affect public rental visibility. -->
+  <insert id="enqueueRentalSyncTasks">
+    INSERT INTO rental_index_sync_tasks (
+    rental_id,
+    retry_count,
+    next_attempt_at,
+    last_error
+    )
+    SELECT
+    r.id,
+    0,
+    UTC_TIMESTAMP(3),
+    NULL
+
+    FROM rentals r
+
+    WHERE r.agent_id = #{userId}
+
+    ORDER BY r.id
+
+    ON DUPLICATE KEY UPDATE
+    retry_count = 0,
+    next_attempt_at = UTC_TIMESTAMP(3),
+    last_error = NULL,
+    updated_at = UTC_TIMESTAMP(3)
+  </insert>
+
+</mapper>

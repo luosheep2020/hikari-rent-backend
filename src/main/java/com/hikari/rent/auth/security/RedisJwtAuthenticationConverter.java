@@ -4,6 +4,7 @@ import com.hikari.rent.auth.cache.LoginSessionCache;
 import com.hikari.rent.auth.model.AuthPrincipal;
 import com.hikari.rent.auth.model.LoginSession;
 import com.hikari.rent.auth.repository.AuthAccountRepository;
+import com.hikari.rent.auth.repository.AuthPermissionRepository;
 import com.hikari.rent.auth.repository.model.AuthAccountRow;
 import com.hikari.rent.auth.service.AuthIdentityService;
 import com.hikari.rent.auth.vo.AuthUserVO;
@@ -11,7 +12,6 @@ import jakarta.annotation.Resource;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -20,7 +20,10 @@ import org.springframework.security.oauth2.server.resource.InvalidBearerTokenExc
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -34,46 +37,33 @@ public class RedisJwtAuthenticationConverter
   private AuthAccountRepository authAccountRepository;
 
   @Resource
+  private AuthPermissionRepository authPermissionRepository;
+
+  @Resource
   private AuthIdentityService authIdentityService;
 
   @Override
   public AbstractAuthenticationToken convert(Jwt jwt) {
     Long userId = parseUserId(jwt.getSubject());
-
-    String sessionId = validateSessionId(
-      jwt.getId()
-    );
+    String sessionId = validateSessionId(jwt.getId());
 
     try {
       LoginSession session =
         loginSessionCache.find(sessionId);
 
-      validateSession(
-        jwt,
-        session,
-        userId
-      );
+      validateSession(jwt, session, userId);
 
       AuthAccountRow account =
         authAccountRepository.findById(userId);
 
-      validateAccount(
-        account,
-        session
-      );
+      validateAccount(account, session);
 
-      // Load current roles instead of using the cached role snapshot.
+      // Reload current roles from the database.
       AuthUserVO user =
         authIdentityService.toUserVO(account);
 
-      var authorities = user.roles()
-        .stream()
-        .map(role ->
-          new SimpleGrantedAuthority(
-            "ROLE_" + role
-          )
-        )
-        .toList();
+      List<SimpleGrantedAuthority> authorities =
+        buildAuthorities(userId, user);
 
       AuthPrincipal principal = new AuthPrincipal(
         userId,
@@ -81,24 +71,58 @@ public class RedisJwtAuthenticationConverter
         user
       );
 
-      return UsernamePasswordAuthenticationToken
-        .authenticated(
-          principal,
-          null,
-          authorities
-        );
+      return UsernamePasswordAuthenticationToken.authenticated(
+        principal,
+        null,
+        authorities
+      );
 
     } catch (InvalidBearerTokenException ex) {
       throw ex;
 
     } catch (RuntimeException ex) {
-      // Infrastructure failures must not authenticate the request.
+      // Authentication must fail when its dependencies are unavailable.
       throw new OAuth2AuthenticationException(
         new OAuth2Error("temporarily_unavailable"),
         "Authentication service is temporarily unavailable",
         ex
       );
     }
+  }
+
+  private List<SimpleGrantedAuthority> buildAuthorities(
+    Long userId,
+    AuthUserVO user
+  ) {
+    Set<String> authorityNames = new LinkedHashSet<>();
+
+    for (String role : user.roles()) {
+      authorityNames.add("ROLE_" + role);
+    }
+
+    List<String> permissionCodes =
+      user.roles().contains("PLATFORM_ADMIN")
+        ? authPermissionRepository.findAllPermissionCodes()
+        : authPermissionRepository.findPermissionCodes(userId);
+
+    for (String permission : permissionCodes) {
+      // Permission definitions must not impersonate role authorities.
+      if (
+        permission == null
+          || permission.isBlank()
+          || permission.startsWith("ROLE_")
+      ) {
+        throw new IllegalStateException(
+          "Invalid permission code in database"
+        );
+      }
+
+      authorityNames.add(permission);
+    }
+
+    return authorityNames.stream()
+      .map(SimpleGrantedAuthority::new)
+      .toList();
   }
 
   private Long parseUserId(String subject) {

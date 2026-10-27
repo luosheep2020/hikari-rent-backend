@@ -14,12 +14,14 @@ import com.hikari.rent.rental.vo.RentalListVO;
 
 import jakarta.annotation.Resource;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
+@PreAuthorize("hasAuthority('favorite:manage')")
 public class FavoriteServiceImpl
   implements FavoriteService {
 

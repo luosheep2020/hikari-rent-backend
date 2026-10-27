@@ -24,6 +24,7 @@ import com.hikari.rent.message.vo.MessageSessionVO;
 
 import jakarta.annotation.Resource;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ public class MessageSessionServiceImpl
 
   @Override
   @Transactional
+  @PreAuthorize("hasAuthority('conversation:read')")
   public MessageSessionCreatedVO openSession(
     OpenMessageSessionRequest request
   ) {
@@ -79,6 +81,7 @@ public class MessageSessionServiceImpl
 
   @Override
   @Transactional(readOnly = true)
+  @PreAuthorize("hasAuthority('conversation:read')")
   public CursorResult<MessageSessionVO> getSessions(
     MessageSessionPageRequest request
   ) {

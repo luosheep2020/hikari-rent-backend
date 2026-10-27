@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.railway.mapper.StationMapper">
+
+  <!-- Load all active station paths in one query. -->
+  <select
+    id="selectTreeRows"
+    resultType="com.hikari.rent.railway.repository.model.StationTreeRow">
+
+    SELECT
+    l.operator_source_code AS operator_code,
+    l.operator_name,
+
+    CAST(l.id AS CHAR) AS line_id,
+    l.name AS line_name,
+
+    CAST(s.id AS CHAR) AS station_id,
+    s.name AS station_name
+
+    FROM railway_lines l
+
+    INNER JOIN stations s
+    ON s.line_id = l.id
+
+    WHERE l.status = 1
+    AND s.status = 1
+    AND l.operator_source_code IS NOT NULL
+    AND l.operator_source_code != ''
+    AND l.operator_name IS NOT NULL
+    AND l.operator_name != ''
+
+    ORDER BY
+    l.operator_source_code ASC,
+    l.sort_order ASC,
+    l.id ASC,
+    s.sort_order ASC,
+    s.id ASC
+
+  </select>
+  <!-- Return operators with at least one active line and station. -->
+  <select
+    id="selectOperators"
+    resultType="com.hikari.rent.railway.vo.StationOptionVO">
+
+    SELECT
+    l.operator_source_code AS `value`,
+    l.operator_name AS label
+
+    FROM railway_lines l
+
+    WHERE l.status = 1
+    AND l.operator_source_code IS NOT NULL
+    AND l.operator_source_code != ''
+    AND l.operator_name IS NOT NULL
+    AND l.operator_name != ''
+
+    AND EXISTS (
+    SELECT 1
+    FROM stations s
+    WHERE s.line_id = l.id
+    AND s.status = 1
+    )
+
+    GROUP BY
+    l.operator_source_code,
+    l.operator_name
+
+    ORDER BY
+    MIN(l.sort_order) ASC,
+    l.operator_source_code ASC
+
+  </select>
+
+
+  <!-- Return active lines for the selected operator. -->
+  <select
+    id="selectLinesByOperatorCode"
+    resultType="com.hikari.rent.railway.vo.StationOptionVO">
+
+    SELECT
+    CAST(l.id AS CHAR) AS `value`,
+    l.name AS label
+
+    FROM railway_lines l
+
+    WHERE l.operator_source_code = #{operatorCode}
+    AND l.status = 1
+
+    AND EXISTS (
+    SELECT 1
+    FROM stations s
+    WHERE s.line_id = l.id
+    AND s.status = 1
+    )
+
+    ORDER BY
+    l.sort_order ASC,
+    l.id ASC
+
+  </select>
+
+
+  <!-- Return active stations for the selected active line. -->
+  <select
+    id="selectStationsByLineId"
+    resultType="com.hikari.rent.railway.vo.StationOptionVO">
+
+    SELECT
+    CAST(s.id AS CHAR) AS `value`,
+    s.name AS label
+
+    FROM stations s
+
+    INNER JOIN railway_lines l
+    ON l.id = s.line_id
+
+    WHERE s.line_id = #{lineId}
+    AND s.status = 1
+    AND l.status = 1
+
+    ORDER BY
+    s.sort_order ASC,
+    s.id ASC
+
+  </select>
+
+  <select
+    id="search"
+    resultType="com.hikari.rent.railway.repository.model.StationSearchRow">
+
+    SELECT
+    s.id,
+    s.name,
+    l.name AS line_name,
+    s.prefecture_code,
+    s.area_code,
+    s.latitude,
+    s.longitude
+
+    FROM stations s
+
+    INNER JOIN railway_lines l
+    ON l.id = s.line_id
+
+    WHERE s.status = 1
+    AND l.status = 1
+
+    <!-- Escape LIKE wildcard characters in user input. -->
+    AND s.name LIKE CONCAT(
+    '%',
+    REPLACE(
+    REPLACE(
+    REPLACE(#{keyword}, '=', '=='),
+    '%', '=%'
+    ),
+    '_', '=_'
+    ),
+    '%'
+    ) ESCAPE '='
+
+    <if test="prefectureCode != null">
+      AND s.prefecture_code = #{prefectureCode}
+    </if>
+
+    <!-- Prefer exact station names, then apply stable ordering. -->
+    ORDER BY
+    CASE WHEN s.name = #{keyword} THEN 0 ELSE 1 END,
+    s.name ASC,
+    l.sort_order ASC,
+    l.id ASC,
+    s.sort_order ASC,
+    s.id ASC
+
+    LIMIT #{limit}
+
+  </select>
+
+</mapper>

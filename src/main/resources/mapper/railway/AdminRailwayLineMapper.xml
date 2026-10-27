@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.railway.mapper.AdminRailwayLineMapper">
+
+  <resultMap
+    id="RailwayLineResultMap"
+    type="com.hikari.rent.railway.entity.RailwayLine">
+
+    <id column="id" property="id"/>
+
+    <result column="source_code" property="sourceCode"/>
+    <result column="name" property="name"/>
+    <result column="name_kana" property="nameKana"/>
+
+    <result
+      column="operator_source_code"
+      property="operatorSourceCode"/>
+
+    <result column="operator_name" property="operatorName"/>
+    <result column="color" property="color"/>
+    <result column="status" property="status"/>
+    <result column="sort_order" property="sortOrder"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="updated_at" property="updatedAt"/>
+
+  </resultMap>
+
+  <sql id="LineColumns">
+    id,
+    source_code,
+    name,
+    name_kana,
+    operator_source_code,
+    operator_name,
+    color,
+    status,
+    sort_order,
+    created_at,
+    updated_at
+  </sql>
+
+  <select id="searchPage" resultMap="RailwayLineResultMap">
+    SELECT
+    <include refid="LineColumns"/>
+
+    FROM railway_lines
+
+    WHERE 1 = 1
+
+    <if test="query.keyword != null and query.keyword.trim() != ''">
+      AND (
+      LOCATE(TRIM(#{query.keyword}), name) > 0
+      OR LOCATE(TRIM(#{query.keyword}), name_kana) > 0
+      )
+    </if>
+
+    <if test="query.operatorSourceCode != null">
+      AND operator_source_code = #{query.operatorSourceCode}
+    </if>
+
+    <if test="query.status != null">
+      AND status = #{query.status}
+    </if>
+
+    ORDER BY sort_order ASC, id ASC
+  </select>
+
+  <select id="selectById" resultMap="RailwayLineResultMap">
+    SELECT
+    <include refid="LineColumns"/>
+
+    FROM railway_lines
+
+    WHERE id = #{lineId}
+  </select>
+
+  <select
+    id="selectByIdForUpdate"
+    resultMap="RailwayLineResultMap">
+
+    SELECT
+    <include refid="LineColumns"/>
+
+    FROM railway_lines
+
+    WHERE id = #{lineId}
+
+    FOR UPDATE
+  </select>
+
+  <!-- Resolve an existing imported operator without requiring active lines. -->
+  <select id="selectOperatorName" resultType="java.lang.String">
+    SELECT operator_name
+
+    FROM railway_lines
+
+    WHERE operator_source_code = #{operatorSourceCode}
+    AND operator_name IS NOT NULL
+    AND TRIM(operator_name) != ''
+
+    ORDER BY id
+
+    LIMIT 1
+  </select>
+
+  <insert
+    id="insert"
+    useGeneratedKeys="true"
+    keyProperty="line.id"
+    keyColumn="id">
+
+    INSERT INTO railway_lines (
+    source_code,
+    name,
+    name_kana,
+    operator_source_code,
+    operator_name,
+    color,
+    status,
+    sort_order,
+    created_at,
+    updated_at
+    )
+    VALUES (
+    #{line.sourceCode},
+    #{line.name},
+    #{line.nameKana},
+    #{line.operatorSourceCode},
+    #{line.operatorName},
+    #{line.color},
+    1,
+    #{line.sortOrder},
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3)
+    )
+  </insert>
+
+  <!-- Source identifiers and operator ownership are immutable here. -->
+  <update id="update">
+    UPDATE railway_lines
+
+    SET
+    name = #{line.name},
+    name_kana = #{line.nameKana},
+    color = #{line.color},
+    sort_order = #{line.sortOrder},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{line.id}
+  </update>
+
+  <update id="updateStatus">
+    UPDATE railway_lines
+
+    SET
+    status = #{status},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{lineId}
+  </update>
+
+  <!-- Preserve compatibility with existing readers of stations.line_name. -->
+  <update id="updateStationLineNames">
+    UPDATE stations
+
+    SET
+    line_name = #{name},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE line_id = #{lineId}
+  </update>
+
+  <!-- Enqueue each affected rental once. -->
+  <insert id="enqueueRentalSyncTasks">
+    INSERT INTO rental_index_sync_tasks (
+    rental_id,
+    retry_count,
+    next_attempt_at,
+    last_error
+    )
+    SELECT DISTINCT
+    rs.rental_id,
+    0,
+    UTC_TIMESTAMP(3),
+    NULL
+
+    FROM rental_stations rs
+
+    INNER JOIN stations s
+    ON s.id = rs.station_id
+
+    WHERE s.line_id = #{lineId}
+
+    ORDER BY rs.rental_id
+
+    ON DUPLICATE KEY UPDATE
+    retry_count = 0,
+    next_attempt_at = UTC_TIMESTAMP(3),
+    last_error = NULL,
+    updated_at = UTC_TIMESTAMP(3)
+  </insert>
+
+</mapper>

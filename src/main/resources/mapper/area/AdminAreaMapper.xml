@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.area.mapper.AdminAreaMapper">
+
+  <resultMap
+    id="AreaResultMap"
+    type="com.hikari.rent.area.entity.Area">
+
+    <id column="code" property="code"/>
+
+    <result column="name" property="name"/>
+    <result column="parent_code" property="parentCode"/>
+    <result column="level" property="level"/>
+    <result column="latitude" property="latitude"/>
+    <result column="longitude" property="longitude"/>
+    <result column="sort_order" property="sortOrder"/>
+
+  </resultMap>
+
+  <sql id="AreaColumns">
+    code,
+    name,
+    parent_code,
+    level,
+    latitude,
+    longitude,
+    sort_order
+  </sql>
+
+  <select id="selectAllOrdered" resultMap="AreaResultMap">
+    SELECT
+    <include refid="AreaColumns"/>
+
+    FROM areas
+
+    ORDER BY level ASC, sort_order ASC, code ASC
+  </select>
+
+  <select id="selectByCode" resultMap="AreaResultMap">
+    SELECT
+    <include refid="AreaColumns"/>
+
+    FROM areas
+
+    WHERE code = #{code}
+  </select>
+
+  <select
+    id="selectByCodeForUpdate"
+    resultMap="AreaResultMap">
+
+    SELECT
+    <include refid="AreaColumns"/>
+
+    FROM areas
+
+    WHERE code = #{code}
+
+    FOR UPDATE
+  </select>
+
+  <select
+    id="selectByCodeForShare"
+    resultMap="AreaResultMap">
+
+    SELECT
+    <include refid="AreaColumns"/>
+
+    FROM areas
+
+    WHERE code = #{code}
+
+    FOR SHARE
+  </select>
+
+  <insert id="insert">
+    INSERT INTO areas (
+    code,
+    name,
+    parent_code,
+    level,
+    latitude,
+    longitude,
+    sort_order,
+    created_at,
+    updated_at
+    )
+    VALUES (
+    #{area.code},
+    #{area.name},
+    #{area.parentCode},
+    #{area.level},
+    #{area.latitude},
+    #{area.longitude},
+    #{area.sortOrder},
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3)
+    )
+  </insert>
+
+  <!-- Codes, levels, and parent relationships are immutable here. -->
+  <update id="update">
+    UPDATE areas
+
+    SET
+    name = #{area.name},
+    latitude = #{area.latitude},
+    longitude = #{area.longitude},
+    sort_order = #{area.sortOrder},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE code = #{area.code}
+  </update>
+
+</mapper>

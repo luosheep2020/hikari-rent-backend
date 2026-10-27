@@ -14,6 +14,7 @@ import com.hikari.rent.company.vo.AdminPositionCreatedVO;
 import com.hikari.rent.company.vo.AdminPositionVO;
 import jakarta.annotation.Resource;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,10 @@ import java.util.Locale;
 import java.util.Objects;
 
 @Service
+@PreAuthorize(
+  "hasAnyRole('PLATFORM_ADMIN', 'COMPANY_ADMIN') "
+    + "and hasAuthority('position:manage')"
+)
 public class AdminPositionServiceImpl
   implements AdminPositionService {
 

@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.hikari.rent.railway.mapper.AdminStationMapper">
+
+  <resultMap
+    id="StationResultMap"
+    type="com.hikari.rent.railway.entity.Station">
+
+    <id column="id" property="id"/>
+
+    <result column="source_code" property="sourceCode"/>
+    <result column="station_group_code" property="stationGroupCode"/>
+    <result column="name" property="name"/>
+    <result column="name_kana" property="nameKana"/>
+    <result column="line_id" property="lineId"/>
+    <result column="line_name" property="lineName"/>
+    <result column="prefecture_code" property="prefectureCode"/>
+    <result column="area_code" property="areaCode"/>
+    <result column="address" property="address"/>
+    <result column="postal_code" property="postalCode"/>
+    <result column="latitude" property="latitude"/>
+    <result column="longitude" property="longitude"/>
+    <result column="status" property="status"/>
+    <result column="sort_order" property="sortOrder"/>
+    <result column="created_at" property="createdAt"/>
+    <result column="updated_at" property="updatedAt"/>
+
+  </resultMap>
+
+  <resultMap
+    id="AdminStationResultMap"
+    type="com.hikari.rent.railway.repository.model.AdminStationRow"
+    extends="StationResultMap">
+
+    <result
+      column="operator_source_code"
+      property="operatorSourceCode"/>
+
+    <result column="operator_name" property="operatorName"/>
+    <result column="prefecture_name" property="prefectureName"/>
+    <result column="area_name" property="areaName"/>
+
+  </resultMap>
+
+  <sql id="StationColumns">
+    s.id,
+    s.source_code,
+    s.station_group_code,
+    s.name,
+    s.name_kana,
+    s.line_id,
+    s.prefecture_code,
+    s.area_code,
+    s.address,
+    s.postal_code,
+    s.latitude,
+    s.longitude,
+    s.status,
+    s.sort_order,
+    s.created_at,
+    s.updated_at
+  </sql>
+
+  <sql id="StationDetailQuery">
+    SELECT
+    <include refid="StationColumns"/>,
+    l.name AS line_name,
+    l.operator_source_code,
+    l.operator_name,
+    prefecture.name AS prefecture_name,
+    municipality.name AS area_name
+
+    FROM stations s
+
+    INNER JOIN railway_lines l
+    ON l.id = s.line_id
+
+    LEFT JOIN areas prefecture
+    ON prefecture.code = s.prefecture_code
+
+    LEFT JOIN areas municipality
+    ON municipality.code = s.area_code
+  </sql>
+
+  <select id="searchPage" resultMap="AdminStationResultMap">
+    <include refid="StationDetailQuery"/>
+
+    WHERE 1 = 1
+
+    <if test="query.keyword != null and query.keyword.trim() != ''">
+      AND (
+      LOCATE(TRIM(#{query.keyword}), s.name) > 0
+      OR LOCATE(TRIM(#{query.keyword}), s.name_kana) > 0
+      )
+    </if>
+
+    <if test="query.lineId != null">
+      AND s.line_id = #{query.lineId}
+    </if>
+
+    <if test="query.operatorSourceCode != null">
+      AND l.operator_source_code = #{query.operatorSourceCode}
+    </if>
+
+    <if test="query.prefectureCode != null">
+      AND s.prefecture_code = #{query.prefectureCode}
+    </if>
+
+    <if test="query.areaCode != null">
+      AND s.area_code = #{query.areaCode}
+    </if>
+
+    <if test="query.status != null">
+      AND s.status = #{query.status}
+    </if>
+
+    ORDER BY s.sort_order ASC, s.id ASC
+  </select>
+
+  <select id="selectDetail" resultMap="AdminStationResultMap">
+    <include refid="StationDetailQuery"/>
+
+    WHERE s.id = #{stationId}
+  </select>
+
+  <select id="selectById" resultMap="StationResultMap">
+    SELECT
+    <include refid="StationColumns"/>,
+    s.line_name
+
+    FROM stations s
+
+    WHERE s.id = #{stationId}
+  </select>
+
+  <select
+    id="selectByIdForUpdate"
+    resultMap="StationResultMap">
+
+    SELECT
+    <include refid="StationColumns"/>,
+    s.line_name
+
+    FROM stations s
+
+    WHERE s.id = #{stationId}
+    AND s.line_id = #{lineId}
+
+    FOR UPDATE
+  </select>
+
+  <insert
+    id="insert"
+    useGeneratedKeys="true"
+    keyProperty="station.id"
+    keyColumn="id">
+
+    INSERT INTO stations (
+    source_code,
+    station_group_code,
+    name,
+    name_kana,
+    line_name,
+    line_id,
+    prefecture_code,
+    area_code,
+    address,
+    postal_code,
+    latitude,
+    longitude,
+    status,
+    sort_order,
+    created_at,
+    updated_at
+    )
+    VALUES (
+    #{station.sourceCode},
+    #{station.stationGroupCode},
+    #{station.name},
+    #{station.nameKana},
+    #{station.lineName},
+    #{station.lineId},
+    #{station.prefectureCode},
+    #{station.areaCode},
+    #{station.address},
+    #{station.postalCode},
+    #{station.latitude},
+    #{station.longitude},
+    1,
+    #{station.sortOrder},
+    UTC_TIMESTAMP(3),
+    UTC_TIMESTAMP(3)
+    )
+  </insert>
+
+  <!-- Source identifiers and line ownership are immutable here. -->
+  <update id="update">
+    UPDATE stations
+
+    SET
+    name = #{station.name},
+    name_kana = #{station.nameKana},
+    line_name = #{station.lineName},
+    prefecture_code = #{station.prefectureCode},
+    area_code = #{station.areaCode},
+    address = #{station.address},
+    postal_code = #{station.postalCode},
+    latitude = #{station.latitude},
+    longitude = #{station.longitude},
+    sort_order = #{station.sortOrder},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{station.id}
+    AND line_id = #{station.lineId}
+  </update>
+
+  <update id="updateStatus">
+    UPDATE stations
+
+    SET
+    status = #{status},
+    updated_at = UTC_TIMESTAMP(3)
+
+    WHERE id = #{stationId}
+    AND line_id = #{lineId}
+  </update>
+
+  <insert id="enqueueRentalSyncTasks">
+    INSERT INTO rental_index_sync_tasks (
+    rental_id,
+    retry_count,
+    next_attempt_at,
+    last_error
+    )
+    SELECT DISTINCT
+    rs.rental_id,
+    0,
+    UTC_TIMESTAMP(3),
+    NULL
+
+    FROM rental_stations rs
+
+    WHERE rs.station_id = #{stationId}
+
+    ORDER BY rs.rental_id
+
+    ON DUPLICATE KEY UPDATE
+    retry_count = 0,
+    next_attempt_at = UTC_TIMESTAMP(3),
+    last_error = NULL,
+    updated_at = UTC_TIMESTAMP(3)
+  </insert>
+
+</mapper>

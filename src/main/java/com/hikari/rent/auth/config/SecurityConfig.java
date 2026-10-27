@@ -139,16 +139,28 @@ public class SecurityConfig {
             "COMPANY_ADMIN",
             "AGENT"
           )
-// Company administrators may manage their own organization data.
+// Company administrators may manage their own organization and agents.
           .requestMatchers(
             "/api/admin/departments",
             "/api/admin/departments/**",
             "/api/admin/positions",
-            "/api/admin/positions/**"
+            "/api/admin/positions/**",
+            "/api/admin/employees",
+            "/api/admin/employees/**"
           )
           .hasAnyRole(
             "PLATFORM_ADMIN",
             "COMPANY_ADMIN"
+          )
+          // Dashboard statistics are restricted by the current user's data scope.
+          .requestMatchers(
+            HttpMethod.GET,
+            "/api/admin/dashboard/overview"
+          )
+          .hasAnyRole(
+            "PLATFORM_ADMIN",
+            "COMPANY_ADMIN",
+            "AGENT"
           )
           // Other administrative endpoints require platform access.
           .requestMatchers("/api/admin/**")
